@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}El Impostor – Mismo Dispositivo{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="text-center mt-2 mb-2">
+    <a href="/" class="back-link"><span class="arrow">&larr;</span> Volver al inicio</a>
+  </div>
+
+  <!-- Page header with mascot -->
+  <div class="text-center mb-2">
+    <div class="mascot-wrapper" style="margin-bottom:.75rem">
+      <!-- Mascot placeholder: local play mascot holding a phone -->
+      <span style="font-size:3rem">📱</span>
+    </div>
+    <h1 class="gradient-text">Mismo Dispositivo</h1>
+    <p class="text-muted subtitle" style="max-width:360px;margin:.3rem auto 0">Pasen el dispositivo entre jugadores para jugar juntos</p>
+  </div>
+
+  <div id="setup-view" class="fade-in">
+    <div class="card mb-2">
+      <h3 class="mb-1">Agregar Jugadores <span class="text-muted" style="font-weight:500;font-size:.85rem">(mínimo 4)</span></h3>
+      <div class="flex gap-1 mb-1">
+        <input id="player-name-input" class="input" placeholder="Nombre del jugador" maxlength="20" />
+        <button id="btn-add-player" class="btn btn-primary" style="flex-shrink:0;border-radius:var(--radius-pill);padding:.75rem 1.2rem">+</button>
+      </div>
+      <ul id="player-list" class="player-list"></ul>
+    </div>
+
+    <div class="card mb-2">
+      <label class="toggle-wrap">
+        <span id="help-toggle-local" class="toggle" role="switch" aria-checked="false" tabindex="0"></span>
+        <span style="font-size:.95rem;font-weight:600">Dar pista al impostor (categoría)</span>
+      </label>
+    </div>
+
+    <button id="btn-start-local" class="btn btn-primary btn-block btn-lg btn-bounce" disabled>
+      🎮 Iniciar Partida
+    </button>
+  </div>
+
+  <!-- Game view inserted by JS -->
+  <div id="game-view" class="hidden fade-in"></div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/local.js') }}"></script>
+{% endblock %}

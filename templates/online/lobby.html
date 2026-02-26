@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}El Impostor – Jugar Online{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="text-center mt-2 mb-2">
+    <a href="/" class="back-link"><span class="arrow">&larr;</span> Volver al inicio</a>
+  </div>
+
+  <!-- Page header with mascot -->
+  <div class="text-center mb-2">
+    <div class="mascot-wrapper" style="margin-bottom:.75rem">
+      <!-- Mascot placeholder: online play mascot with wifi/globe -->
+      <span style="font-size:3rem">🌐</span>
+    </div>
+    <h1 class="gradient-text">Jugar Online</h1>
+    <p class="text-muted subtitle" style="max-width:360px;margin:.3rem auto 0">Crea una sala o únete con un código</p>
+  </div>
+
+  <!-- CREATE OR JOIN -->
+  <div id="lobby-options" class="fade-in">
+    <!-- Tab navigation (Gartic Phone style) -->
+    <div class="tab-nav mb-2">
+      <button class="tab active" data-tab="create">Crear Sala</button>
+      <button class="tab" data-tab="join">Unirse</button>
+    </div>
+
+    <!-- Create Room -->
+    <div id="tab-create" class="card mb-2">
+      <div class="illustration-row" style="margin:.5rem 0 1rem">
+        <div class="mascot-wrapper-sm">
+          <span style="font-size:2rem">👑</span>
+        </div>
+      </div>
+      <div class="input-group mb-1">
+        <label for="host-name">Tu nombre</label>
+        <input id="host-name" class="input" placeholder="Nombre del anfitrión" maxlength="20" />
+      </div>
+      <label class="toggle-wrap mb-1">
+        <span id="help-toggle" class="toggle" role="switch" aria-checked="false" tabindex="0"></span>
+        <span style="font-size:.95rem;font-weight:600">Dar pista al impostor (categoría)</span>
+      </label>
+      <button id="btn-create" class="btn btn-primary btn-block btn-lg">🎮 Crear Sala</button>
+    </div>
+
+    <!-- Join Room -->
+    <div id="tab-join" class="card hidden">
+      <div class="illustration-row" style="margin:.5rem 0 1rem">
+        <div class="mascot-wrapper-sm">
+          <span style="font-size:2rem">🔗</span>
+        </div>
+      </div>
+      <div class="input-group mb-1">
+        <label for="join-name">Tu nombre</label>
+        <input id="join-name" class="input" placeholder="Tu nombre" maxlength="20" />
+      </div>
+      <div class="input-group mb-1">
+        <label for="join-code">Código de sala</label>
+        <input id="join-code" class="input" placeholder="ABC123" maxlength="6" style="text-transform:uppercase;letter-spacing:.15em;text-align:center" />
+      </div>
+      <button id="btn-join" class="btn btn-ghost btn-block btn-lg">🚪 Unirse</button>
+    </div>
+  </div>
+
+  <!-- ROOM VIEW (hidden until joined) -->
+  <div id="room-view" class="hidden fade-in">
+    <!-- filled dynamically by JS -->
+  </div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='js/online.js') }}"></script>
+{% endblock %}

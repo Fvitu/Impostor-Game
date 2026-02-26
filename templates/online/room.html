@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}El Impostor – Sala {{ room_code }}{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div id="room-view" class="fade-in" data-code="{{ room_code }}" data-name="{{ player_name }}">
+    <!-- Connecting state with mascot -->
+    <div class="text-center mt-4">
+      <div class="mascot-wrapper pulse-glow" style="margin-bottom:1rem">
+        <span style="font-size:3rem">🔄</span>
+      </div>
+      <p class="text-muted" style="font-weight:700">Conectando a la sala…</p>
+    </div>
+  </div>
+</div>
+<div class="toast-container" id="toasts"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='js/online.js') }}"></script>
+{% endblock %}
