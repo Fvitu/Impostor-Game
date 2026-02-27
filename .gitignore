@@ -1,44 +1,5 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Distribution / packaging
-.Python
-build/
-dist/
-*.egg-info/
-*.egg
-
-# Virtual environments
-.env
-.venv/
-env/
-venv/
-ENV/
-
-# IDE
-.vscode/
-*.code-workspace
-.idea/
-
-# Testing
-.tox/
-.coverage
-.pytest_cache/
-htmlcov/
-test.py
-.cache
-.cache_ggshield
-
-# Flask
-instance/
-
-# Logs
-logs/
-*.log
-
-
-# OS
+# Common ignores
+node_modules/
+.next/
+.env*.local
 .DS_Store
-Thumbs.db
