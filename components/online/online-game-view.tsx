@@ -256,11 +256,11 @@ function OnlineInGame({
         <OnlineHeader phase="Clue Phase" round={game.currentRound} maxRounds={game.maxRounds} />
         <div className="flex-1 px-4 py-6 max-w-lg mx-auto w-full">
           {/* My Role Card */}
-          <div className={`rounded-xl border-2 p-4 mb-6 ${isImpostor ? "border-primary/30 bg-primary/5" : "border-accent/30 bg-accent/5"}`}>
+          <div className={`rounded-xl border-2 p-4 mb-6 ${isImpostor ? "border-primary/30 bg-primary/5" : "border-success/30 bg-success/5"}`}>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-mono text-muted-foreground">Your Role</p>
-                <p className={`text-sm font-bold ${isImpostor ? "text-primary" : "text-accent"}`}>
+                <p className={`text-sm font-bold ${isImpostor ? "text-primary" : "text-success"}`}>
                   {isImpostor ? "The Impostor" : "Friend"}
                 </p>
               </div>

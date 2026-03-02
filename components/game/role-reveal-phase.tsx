@@ -71,7 +71,7 @@ export function RoleRevealPhase() {
             isRevealed
               ? isImpostor
                 ? "border-primary bg-primary/10"
-                : "border-accent bg-accent/10"
+                : "border-success bg-success/10"
               : "border-border bg-card"
           }`}
         >
@@ -82,7 +82,7 @@ export function RoleRevealPhase() {
               </p>
               <p
                 className={`text-2xl font-bold mb-4 ${
-                  isImpostor ? "text-primary" : "text-accent"
+                  isImpostor ? "text-primary" : "text-success"
                 }`}
               >
                 {isImpostor ? "The Impostor" : "Friend"}

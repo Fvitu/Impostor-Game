@@ -20,9 +20,9 @@ export function Scoreboard({ game, backPath }: ScoreboardProps) {
       {/* Header */}
       <div className="text-center pt-12 pb-8 px-4">
         <div className={`h-20 w-20 rounded-full flex items-center justify-center mx-auto mb-6 ${
-          winner === "friends" ? "bg-accent/10" : "bg-primary/10"
+          winner === "friends" ? "bg-success/10" : "bg-primary/10"
         }`}>
-          <Trophy className={`h-10 w-10 ${winner === "friends" ? "text-accent" : "text-primary"}`} />
+          <Trophy className={`h-10 w-10 ${winner === "friends" ? "text-success" : "text-primary"}`} />
         </div>
         <p className="text-xs font-mono tracking-widest text-muted-foreground uppercase mb-2">
           Game Over
@@ -103,7 +103,7 @@ export function Scoreboard({ game, backPath }: ScoreboardProps) {
                             Impostor
                           </span>
                         ) : (
-                          <span className="text-xs rounded-full bg-accent/10 text-accent px-2 py-0.5 font-mono">
+                          <span className="text-xs rounded-full bg-success/10 text-success px-2 py-0.5 font-mono">
                             Friend
                           </span>
                         )}
@@ -151,9 +151,9 @@ export function Scoreboard({ game, backPath }: ScoreboardProps) {
                   <span className={`text-xs font-mono px-2 py-0.5 rounded-full ${
                     result.wasTie
                       ? "bg-secondary text-secondary-foreground"
-                      : !result.impostorSurvived
-                      ? "bg-accent/10 text-accent"
-                      : "bg-primary/10 text-primary"
+                        : !result.impostorSurvived
+                        ? "bg-success/10 text-success"
+                        : "bg-primary/10 text-primary"
                   }`}>
                     {result.wasTie ? "Tie" : !result.impostorSurvived ? "Impostor Found" : "Impostor Survived"}
                   </span>

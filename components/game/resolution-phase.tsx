@@ -42,12 +42,12 @@ export function ResolutionPhase() {
           </div>
         ) : eliminatedPlayer ? (
           <div>
-            {!lastResult.impostorSurvived ? (
+              !lastResult.impostorSurvived ? (
               <>
-                <div className="h-16 w-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-6">
-                  <Trophy className="h-8 w-8 text-accent" />
+                <div className="h-16 w-16 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-6">
+                  <Trophy className="h-8 w-8 text-success" />
                 </div>
-                <h2 className="text-2xl font-bold text-accent mb-3">
+                <h2 className="text-2xl font-bold text-success mb-3">
                   Impostor Found!
                 </h2>
                 <p className="text-sm text-muted-foreground mb-2">
@@ -75,7 +75,7 @@ export function ResolutionPhase() {
                   The Impostor survives and earns points.
                 </p>
               </>
-            )}
+            )
           </div>
         ) : null}
 
@@ -91,7 +91,7 @@ export function ResolutionPhase() {
                   <span className="text-sm text-foreground">{voter?.name}</span>
                   <span className="text-xs text-muted-foreground font-mono">
                     {"voted "}
-                    <span className={target?.role === "impostor" ? "text-accent" : "text-muted-foreground"}>
+                    <span className={target?.role === "impostor" ? "text-primary" : "text-muted-foreground"}>
                       {target?.name}
                     </span>
                   </span>
