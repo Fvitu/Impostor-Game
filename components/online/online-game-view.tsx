@@ -82,7 +82,7 @@ export function OnlineGameView({ roomCode, playerId, isHost }: OnlineGameViewPro
   // SETUP / WAITING ROOM
   if (game.phase === "setup") {
     return (
-      <div className="min-h-dvh bg-background flex flex-col">
+      <div className="min-h-dvh flex flex-col">
         <header className="flex items-center gap-3 px-4 py-4 border-b border-border">
           <Button asChild variant="ghost" size="icon">
             <Link href="/play/online">
@@ -252,7 +252,7 @@ function OnlineInGame({
       .map((p) => ({ name: p.name, clue: p.clues[game.currentRound - 1] }))
 
     return (
-      <div className="min-h-dvh bg-background flex flex-col">
+      <div className="min-h-dvh flex flex-col">
         <OnlineHeader phase="Clue Phase" round={game.currentRound} maxRounds={game.maxRounds} />
         <div className="flex-1 px-4 py-6 max-w-lg mx-auto w-full">
           {/* My Role Card */}
@@ -379,7 +379,7 @@ function OnlineInGame({
     const votedCount = activePlayers.filter((p) => p.votedFor !== null).length
 
     return (
-      <div className="min-h-dvh bg-background flex flex-col">
+      <div className="min-h-dvh flex flex-col">
         <OnlineHeader phase="Voting" round={game.currentRound} maxRounds={game.maxRounds} />
         <div className="flex-1 px-4 py-6 max-w-lg mx-auto w-full">
           {/* Clue Summary */}
@@ -462,7 +462,7 @@ function OnlineInGame({
     const impostor = game.players.find((p) => p.role === "impostor")
 
     return (
-      <div className="min-h-dvh bg-background flex flex-col items-center justify-center px-4">
+      <div className="min-h-dvh flex flex-col items-center justify-center px-4">
         <div className="w-full max-w-sm text-center animate-slide-up">
           <p className="text-xs font-mono tracking-widest text-muted-foreground uppercase mb-4">
             {"Round "}

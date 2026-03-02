@@ -39,7 +39,7 @@ export function VotingPhase() {
 
   if (readyToResolve && allVoted) {
     return (
-      <div className="min-h-dvh bg-background flex flex-col items-center justify-center px-4">
+      <div className="min-h-dvh flex flex-col items-center justify-center px-4">
         <div className="text-center max-w-sm animate-slide-up">
           <Vote className="h-12 w-12 text-primary mx-auto mb-6 animate-pulse-glow" />
           <h2 className="text-2xl font-bold text-foreground mb-3">All Votes Are In</h2>
@@ -61,7 +61,7 @@ export function VotingPhase() {
   if (!currentVoter) return null
 
   return (
-    <div className="min-h-dvh bg-background flex flex-col">
+    <div className="min-h-dvh flex flex-col">
       {/* Header */}
       <header className="px-4 py-4 border-b border-border">
         <div className="flex items-center justify-between">

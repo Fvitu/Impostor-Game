@@ -39,7 +39,7 @@ export function RoleRevealPhase() {
   const isImpostor = currentPlayer.role === "impostor"
 
   return (
-    <div className="min-h-dvh bg-background flex flex-col items-center justify-center px-4">
+    <div className="min-h-dvh flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm text-center">
         {/* Round indicator */}
         <div className="mb-8">

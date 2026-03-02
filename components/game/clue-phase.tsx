@@ -42,7 +42,7 @@ export function CluePhase() {
     }))
 
   return (
-    <div className="min-h-dvh bg-background flex flex-col">
+    <div className="min-h-dvh flex flex-col">
       {/* Header */}
       <header className="px-4 py-4 border-b border-border">
         <div className="flex items-center justify-between">

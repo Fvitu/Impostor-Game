@@ -17,7 +17,7 @@ export function ResolutionPhase() {
   const impostor = game.players.find((p) => p.role === "impostor")
 
   return (
-    <div className="min-h-dvh bg-background flex flex-col items-center justify-center px-4">
+    <div className="min-h-dvh flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm text-center animate-slide-up">
         <p className="text-xs font-mono tracking-widest text-muted-foreground uppercase mb-4">
           {"Round "}

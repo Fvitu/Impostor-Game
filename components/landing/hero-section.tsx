@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button"
 
 export function HeroSection() {
   return (
-    <section className="relative flex flex-col items-center justify-center min-h-[85vh] px-4 overflow-hidden">
+    <section className="relative flex flex-col items-center justify-center min-h-[100vh] px-4 overflow-hidden">
       {/* Background Glow */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-primary/5 blur-3xl" />
+        <div className="absolute top-1/3 left-1/2 w-[800px] h-[800px] rounded-full bg-primary/5 blur-3xl animate-hero-glow-drift" />
       </div>
 
       <div className="relative z-10 text-center max-w-3xl mx-auto animate-slide-up">

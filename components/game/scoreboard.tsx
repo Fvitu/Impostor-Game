@@ -16,7 +16,7 @@ export function Scoreboard({ game, backPath }: ScoreboardProps) {
   const impostor = game.players.find((p) => p.role === "impostor")
 
   return (
-    <div className="min-h-dvh bg-background flex flex-col">
+    <div className="min-h-dvh flex flex-col">
       {/* Header */}
       <div className="text-center pt-12 pb-8 px-4">
         <div className={`h-20 w-20 rounded-full flex items-center justify-center mx-auto mb-6 ${

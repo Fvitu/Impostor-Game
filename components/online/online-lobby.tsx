@@ -58,7 +58,7 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
   }
 
   return (
-    <div className="min-h-dvh bg-background flex flex-col">
+    <div className="min-h-dvh flex flex-col">
       <header className="flex items-center gap-3 px-4 py-4 border-b border-border">
         <Button asChild variant="ghost" size="icon">
           <Link href="/">
