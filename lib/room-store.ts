@@ -3,15 +3,16 @@
 
 import type { GameState, Player } from "./game-logic"
 import {
-  createGame,
-  createPlayer,
-  assignRoles,
-  submitClue,
-  submitVote,
-  resolveRound,
-  allVotesIn,
-  generateRoomCode,
-} from "./game-logic"
+	createGame,
+	createPlayer,
+	assignRoles,
+	startNextRound as startNextRoundState,
+	submitClue,
+	submitVote,
+	resolveRound,
+	allVotesIn,
+	generateRoomCode,
+} from "./game-logic";
 
 export interface Room {
   code: string
@@ -104,6 +105,13 @@ export function submitRoomVote(code: string, voterId: string, targetId: string):
   const room = getRoom(code)
   if (!room || room.game.phase !== "voting") return null
 
+  const voter = room.game.players.find((p) => p.id === voterId);
+  const target = room.game.players.find((p) => p.id === targetId);
+
+  if (!voter || voter.isEliminated) return null;
+  if (!target || target.isEliminated) return null;
+  if (voterId === targetId) return null;
+
   room.game = submitVote(room.game, voterId, targetId)
 
   // Auto-resolve when all votes are in
@@ -118,10 +126,9 @@ export function submitRoomVote(code: string, voterId: string, targetId: string):
 export function startNextRound(code: string, hostId: string): Room | null {
   const room = getRoom(code)
   if (!room || room.hostId !== hostId) return null
-  if (room.game.phase !== "resolution" && room.game.phase !== "roles") return null
+  if (room.game.phase !== "resolution") return null;
 
-  room.game = assignRoles(room.game)
-  room.game.phase = "clues"
+  room.game = startNextRoundState(room.game);
   room.lastActivity = Date.now()
   return room
 }

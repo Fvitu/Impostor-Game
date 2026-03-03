@@ -2,16 +2,7 @@
 
 import { createContext, useContext, useReducer, type ReactNode } from "react"
 import type { GameState } from "@/lib/game-logic"
-import {
-  createGame,
-  addPlayer,
-  removePlayer,
-  assignRoles,
-  startCluePhase,
-  submitClue,
-  submitVote,
-  resolveRound,
-} from "@/lib/game-logic"
+import { createGame, addPlayer, removePlayer, assignRoles, startNextRound, startCluePhase, submitClue, submitVote, resolveRound } from "@/lib/game-logic";
 
 type GameAction =
   | { type: "RESET"; mode: "pass-and-play" | "online" }
@@ -47,7 +38,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
     case "RESOLVE_ROUND":
       return resolveRound(state)
     case "NEXT_ROUND":
-      return assignRoles(state)
+      return startNextRound(state);
     case "SET_STATE":
       return action.state
     default:

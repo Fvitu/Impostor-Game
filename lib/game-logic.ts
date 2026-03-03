@@ -149,6 +149,25 @@ export function submitClue(game: GameState, playerId: string, clue: string): Gam
 }
 
 export function submitVote(game: GameState, voterId: string, targetId: string): GameState {
+  if (game.phase !== "voting") {
+		return game;
+  }
+
+  const voter = game.players.find((p) => p.id === voterId);
+  const target = game.players.find((p) => p.id === targetId);
+
+  if (!voter || voter.isEliminated) {
+		return game;
+  }
+
+  if (!target || target.isEliminated) {
+		return game;
+  }
+
+  if (voterId === targetId) {
+		return game;
+  }
+
   const updatedPlayers = game.players.map((p) => {
     if (p.id === voterId) {
       return { ...p, votedFor: targetId }
@@ -230,17 +249,18 @@ export function resolveRound(game: GameState): GameState {
 
   // Check game end conditions
   const impostorEliminated = eliminatedPlayerId === impostor.id
+  const remainingActivePlayers = updatedPlayers.filter((p) => !p.isEliminated).length;
   const isLastRound = game.currentRound >= game.maxRounds
 
   let gameOver = false
   let winner: "friends" | "impostor" | null = null
 
   if (impostorEliminated) {
-    gameOver = true
-    winner = "friends"
-  } else if (isLastRound) {
-    gameOver = true
-    winner = "impostor"
+		gameOver = true;
+		winner = "friends";
+  } else if (remainingActivePlayers <= 2 || isLastRound) {
+		gameOver = true;
+		winner = "impostor";
   }
 
   // Apply bonuses if game is over
@@ -257,6 +277,18 @@ export function resolveRound(game: GameState): GameState {
     winner,
     currentPlayerIndex: 0,
   }
+}
+
+export function startNextRound(game: GameState): GameState {
+	if (game.phase !== "resolution" || game.winner) {
+		return game;
+	}
+
+	return {
+		...game,
+		phase: "clues",
+		currentPlayerIndex: 0,
+	};
 }
 
 function calculateRoundScore(
