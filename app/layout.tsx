@@ -8,9 +8,14 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'The Impostor - Party Game',
-  description: 'A thrilling multiplayer party game. Find the impostor among your friends or survive undetected. Play online or pass-and-play on a single device.',
-}
+	title: "The Impostor - Party Game",
+	description:
+		"A thrilling multiplayer party game. Find the impostor among your friends or survive undetected. Play online or pass-and-play on a single device.",
+	icons: {
+		icon: "/Impostor-icon.png",
+		apple: "/Impostor-icon.png",
+	},
+};
 
 export const viewport: Viewport = {
   themeColor: '#1a1a2e',
@@ -28,8 +33,8 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="font-sans antialiased min-h-dvh">
-        <PointerGridOverlay />
         {children}
+        <PointerGridOverlay />
         <Analytics />
       </body>
     </html>

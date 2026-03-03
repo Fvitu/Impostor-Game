@@ -7,7 +7,7 @@ export default function HomePage() {
       <HeroSection />
       <RulesSection />
       <ScoringSection />
-      <footer className="py-8 px-4 text-center border-t border-border bg-card">
+      <footer className="page-footer py-8 px-4 text-center border-t border-border bg-card/40 backdrop-blur-sm transition-colors relative z-20">
         <p className="text-xs text-muted-foreground font-mono">
           The Impostor &mdash; A party game of deception and deduction
         </p>

@@ -2,8 +2,9 @@
 
 import { useGame } from "./game-provider"
 import { Button } from "@/components/ui/button"
-import { Trophy, Skull, ArrowRight, RotateCcw } from "lucide-react"
+import { Trophy, Skull, ArrowRight, RotateCcw, ArrowLeft } from "lucide-react"
 import Link from "next/link"
+import { GameNavbar } from "@/components/game/game-navbar"
 
 export function ResolutionPhase() {
   const { game, dispatch } = useGame()
@@ -16,9 +17,15 @@ export function ResolutionPhase() {
     : null
   const impostor = game.players.find((p) => p.role === "impostor")
 
+  const Header = (
+    <GameNavbar backHref="/" title={""} subtitle={"Round " + game.currentRound + " Result"} round={game.currentRound} maxRounds={game.maxRounds} />
+  )
+
   return (
-    <div className="min-h-dvh flex flex-col items-center justify-center px-4">
-      <div className="w-full max-w-sm text-center animate-slide-up">
+    <div className="min-h-dvh flex flex-col">
+      {Header}
+      <div className="flex-1 flex items-center justify-center px-4">
+        <div className="w-full max-w-sm mx-auto text-center animate-slide-up">
         <p className="text-xs font-mono tracking-widest text-muted-foreground uppercase mb-4">
           {"Round "}
           {game.currentRound}
@@ -118,17 +125,18 @@ export function ResolutionPhase() {
               </Button>
             </Link>
           </div>
-        ) : (
-          <Button
-            onClick={() => dispatch({ type: "NEXT_ROUND" })}
-            size="lg"
-            className="w-full h-14 text-base bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            {"Next Round"}
-            <ArrowRight className="h-5 w-5 ml-2" />
-          </Button>
-        )}
-      </div>
-    </div>
-  )
-}
+            ) : (
+              <Button
+                onClick={() => dispatch({ type: "NEXT_ROUND" })}
+                size="lg"
+                className="w-full h-14 text-base bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                {"Next Round"}
+                <ArrowRight className="h-5 w-5 ml-2" />
+              </Button>
+            )}
+            </div>
+          </div>
+        </div>
+      )
+    }

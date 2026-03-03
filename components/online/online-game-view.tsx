@@ -10,6 +10,7 @@ import {
   Send, Vote, ChevronRight, Trophy, Skull, RotateCcw, ArrowRight, ArrowLeft, Crown
 } from "lucide-react"
 import Link from "next/link"
+import { GameNavbar } from "@/components/game/game-navbar"
 
 interface OnlineGameViewProps {
   roomCode: string
@@ -83,21 +84,11 @@ export function OnlineGameView({ roomCode, playerId, isHost }: OnlineGameViewPro
   if (game.phase === "setup") {
     return (
       <div className="min-h-dvh flex flex-col">
-        <header className="flex items-center gap-3 px-4 py-4 border-b border-border">
-          <Button asChild variant="ghost" size="icon">
-            <Link href="/play/online">
-              <ArrowLeft className="h-5 w-5" />
-              <span className="sr-only">Leave room</span>
-            </Link>
-          </Button>
-          <div className="flex-1">
-            <h1 className="text-lg font-bold text-foreground">Waiting Room</h1>
-            <p className="text-xs text-muted-foreground font-mono">
-              {game.players.length}
-              {" players joined"}
-            </p>
-          </div>
-        </header>
+        <GameNavbar
+          backHref="/play/online"
+          title={"Waiting Room"}
+          subtitle={<span className="text-xs font-mono text-muted-foreground">{game.players.length + " players joined"}</span>}
+        />
 
         <div className="flex-1 px-4 py-6 max-w-lg mx-auto w-full">
           {/* Room Code */}
@@ -253,7 +244,7 @@ function OnlineInGame({
 
     return (
       <div className="min-h-dvh flex flex-col">
-        <OnlineHeader phase="Clue Phase" round={game.currentRound} maxRounds={game.maxRounds} />
+        <GameNavbar backHref="/play/online" title={"Give Your Clue"} subtitle={"Round " + game.currentRound + " - Clue Phase"} round={game.currentRound} maxRounds={game.maxRounds} />
         <div className="flex-1 px-4 py-6 max-w-lg mx-auto w-full">
           {/* My Role Card */}
           <div className={`rounded-xl border-2 p-4 mb-6 ${isImpostor ? "border-primary/30 bg-primary/5" : "border-success/30 bg-success/5"}`}>
@@ -380,7 +371,7 @@ function OnlineInGame({
 
     return (
       <div className="min-h-dvh flex flex-col">
-        <OnlineHeader phase="Voting" round={game.currentRound} maxRounds={game.maxRounds} />
+        <GameNavbar backHref="/play/online" title={"Cast Your Vote"} subtitle={"Round " + game.currentRound + " - Voting"} round={game.currentRound} maxRounds={game.maxRounds} />
         <div className="flex-1 px-4 py-6 max-w-lg mx-auto w-full">
           {/* Clue Summary */}
           <div className="mb-6">
@@ -567,26 +558,4 @@ function OnlineInGame({
   )
 }
 
-function OnlineHeader({ phase, round, maxRounds }: { phase: string; round: number; maxRounds: number }) {
-  return (
-    <header className="px-4 py-4 border-b border-border">
-      <div className="flex items-center justify-between max-w-lg mx-auto">
-        <div>
-          <p className="text-xs font-mono tracking-widest text-primary uppercase">
-            {"Round "}
-            {round}
-            {" - "}
-            {phase}
-          </p>
-          <h1 className="text-lg font-bold text-foreground mt-1">The Impostor</h1>
-        </div>
-        <span className="text-xs font-mono text-muted-foreground rounded-full bg-secondary px-3 py-1">
-          {"R"}
-          {round}
-          {"/"}
-          {maxRounds}
-        </span>
-      </div>
-    </header>
-  )
-}
+// Replaced by shared GameNavbar

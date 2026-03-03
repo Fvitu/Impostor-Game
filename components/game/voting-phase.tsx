@@ -4,7 +4,9 @@ import { useState } from "react"
 import { useGame } from "./game-provider"
 import { Button } from "@/components/ui/button"
 import { getActivePlayersForVoting, allVotesIn } from "@/lib/game-logic"
-import { Vote, Check, ChevronRight, MessageSquare } from "lucide-react"
+import { Vote, Check, ChevronRight, MessageSquare, ArrowLeft } from "lucide-react"
+import Link from "next/link"
+import { GameNavbar } from "@/components/game/game-navbar"
 
 export function VotingPhase() {
   const { game, dispatch } = useGame()
@@ -62,26 +64,16 @@ export function VotingPhase() {
 
   return (
     <div className="min-h-dvh flex flex-col">
-      {/* Header */}
-      <header className="px-4 py-4 border-b border-border">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs font-mono tracking-widest text-primary uppercase">
-              {"Round "}
-              {game.currentRound}
-              {" - Voting"}
-            </p>
-            <h1 className="text-lg font-bold text-foreground mt-1">Cast Your Vote</h1>
-          </div>
-          <span className="text-xs font-mono text-muted-foreground rounded-full bg-secondary px-3 py-1">
-            {currentVoterIndex + 1}
-            {"/"}
-            {activePlayers.length}
-          </span>
-        </div>
-      </header>
+      <GameNavbar
+        backHref="/"
+        title={"Cast Your Vote"}
+        subtitle={"Round " + game.currentRound + " - Voting"}
+        round={game.currentRound}
+        maxRounds={game.maxRounds}
+      />
 
-      <div className="flex-1 px-4 py-6 max-w-lg mx-auto w-full flex flex-col">
+      <div className="flex-1 flex items-center justify-center px-4">
+        <div className="max-w-lg w-full py-6 mx-auto flex flex-col">
         {/* Clue Summary */}
         <div className="mb-6">
           <p className="text-xs font-mono text-muted-foreground uppercase mb-3">
@@ -165,5 +157,6 @@ export function VotingPhase() {
         </div>
       </div>
     </div>
+  </div>
   )
 }

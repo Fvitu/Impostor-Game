@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Wifi, UserPlus } from "lucide-react";
 import Link from "next/link";
+import { GameNavbar } from "@/components/game/game-navbar";
 
 interface OnlineLobbyProps {
 	onJoined: (code: string, playerId: string, isHost: boolean) => void;
@@ -59,18 +60,7 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 
 	return (
 		<div className="min-h-dvh flex flex-col">
-			<header className="flex items-center gap-3 px-4 py-4 border-b border-border">
-				<Button asChild variant="ghost" size="icon">
-					<Link href="/">
-						<ArrowLeft className="h-5 w-5" />
-						<span className="sr-only">Back to home</span>
-					</Link>
-				</Button>
-				<div>
-					<h1 className="text-lg font-bold text-foreground">Play Online</h1>
-					<p className="text-xs text-muted-foreground font-mono">Create or join a room</p>
-				</div>
-			</header>
+			<GameNavbar backHref="/" title={"Play Online"} subtitle={"Create or join a room"} />
 
 			<div className="flex-1 flex flex-col items-center justify-center px-4 max-w-sm mx-auto w-full">
 				{mode === "choose" && (

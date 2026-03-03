@@ -5,7 +5,9 @@ import { useGame } from "./game-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { getCurrentCluePlayer, getActivePlayersForClues } from "@/lib/game-logic"
-import { MessageSquare, Send, ChevronRight } from "lucide-react"
+import { MessageSquare, Send, ChevronRight, ArrowLeft } from "lucide-react"
+import Link from "next/link"
+import { GameNavbar } from "@/components/game/game-navbar"
 
 export function CluePhase() {
   const { game, dispatch } = useGame()
@@ -43,26 +45,16 @@ export function CluePhase() {
 
   return (
     <div className="min-h-dvh flex flex-col">
-      {/* Header */}
-      <header className="px-4 py-4 border-b border-border">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs font-mono tracking-widest text-primary uppercase">
-              {"Round "}
-              {game.currentRound}
-              {" - Clue Phase"}
-            </p>
-            <h1 className="text-lg font-bold text-foreground mt-1">Give Your Clue</h1>
-          </div>
-          <span className="text-xs font-mono text-muted-foreground rounded-full bg-secondary px-3 py-1">
-            {game.currentPlayerIndex + 1}
-            {"/"}
-            {activePlayers.length}
-          </span>
-        </div>
-      </header>
+      <GameNavbar
+        backHref="/"
+        title={"Give Your Clue"}
+        subtitle={"Round " + game.currentRound + " - Clue Phase"}
+        round={game.currentRound}
+        maxRounds={game.maxRounds}
+      />
 
-      <div className="flex-1 px-4 py-6 max-w-lg mx-auto w-full flex flex-col">
+      <div className="flex-1 flex items-center justify-center px-4">
+        <div className="max-w-lg w-full py-6 mx-auto flex flex-col">
         {/* Previous Clues */}
         {previousClues.length > 0 && (
           <div className="mb-6">
@@ -83,7 +75,7 @@ export function CluePhase() {
                     {'"'}
                   </span>
                 </div>
-              ))}
+             ))}
             </div>
           </div>
         )}
@@ -141,5 +133,6 @@ export function CluePhase() {
         </div>
       </div>
     </div>
+  </div>
   )
 }

@@ -163,9 +163,8 @@
 .pointer-grid-overlay {
   position: fixed;
   inset: 0;
-  /* keep the grid visually behind all page content to avoid lines "on top" of UI
-     using a negative z-index ensures the overlay sits behind stacking contexts
-     created by page elements while remaining visible above the page background */
+  /* Keep the grid visually behind page content so elements with
+     `backdrop-filter` (like the footer) can blur the grid. */
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
@@ -215,4 +214,12 @@ body > *:not(.pointer-grid-overlay) {
   .pointer-grid-overlay {
     display: none;
   }
+}
+
+/* Footer backdrop helper: ensure the footer uses both standard and
+   -webkit prefixed backdrop-filter for broader browser support and
+   sits above the overlay so it can blur the grid underneath. */
+.page-footer {
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
 }
