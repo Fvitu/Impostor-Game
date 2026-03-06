@@ -26,28 +26,32 @@ export function HeroSection() {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Button asChild size="lg" className="w-full sm:w-auto text-base px-8 py-6 bg-primary text-primary-foreground hover:bg-primary/90">
-            <Link href="/play/online">
-              <Wifi className="mr-2 h-5 w-5" />
-              Play Online
-            </Link>
-          </Button>
+          <div className="glow-box glow-box--clean rounded-md w-full sm:w-auto">
+            <Button asChild size="lg" className="w-full text-base px-8 py-6 bg-primary text-primary-foreground hover:bg-primary/90 border-0">
+              <Link href="/play/online">
+                <Wifi className="mr-2 h-5 w-5" />
+                Play Online
+              </Link>
+            </Button>
+          </div>
 
-          <Button
-            asChild
-            size="lg"
-            variant="outline"
-            className="w-full sm:w-auto text-base px-8 py-6 border-border text-foreground hover:bg-secondary hover:text-secondary-foreground"
-          >
-            <Link href="/play/local">
-              <Smartphone className="mr-2 h-5 w-5" />
-              {"Pass & Play"}
-            </Link>
-          </Button>
+          <div className="glow-box glow-box--clean rounded-md w-full sm:w-auto">
+            <Button
+              asChild
+              size="lg"
+              variant="outline"
+              className="w-full text-base px-8 py-6 border-border text-foreground hover:bg-secondary hover:text-secondary-foreground"
+            >
+              <Link href="/play/local">
+                <Smartphone className="mr-2 h-5 w-5" />
+                {"Pass & Play"}
+              </Link>
+            </Button>
+          </div>
         </div>
 
         <p className="text-xs text-muted-foreground mt-6 font-mono">
-          {"4+ players required"}
+          {"3+ players required"}
         </p>
       </div>
     </section>

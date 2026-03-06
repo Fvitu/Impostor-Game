@@ -12,18 +12,20 @@ export interface Player {
 }
 
 export interface GameState {
-  id: string
-  mode: "pass-and-play" | "online"
-  phase: "setup" | "roles" | "clues" | "voting" | "resolution" | "game-over"
-  players: Player[]
-  currentRound: number
-  maxRounds: number
-  secretWord: string
-  category: string
-  impostorHelp: boolean
-  currentPlayerIndex: number
-  roundResults: RoundResult[]
-  winner: "friends" | "impostor" | null
+	id: string;
+	mode: "pass-and-play" | "online";
+	phase: "setup" | "roles" | "clues" | "voting" | "resolution" | "game-over";
+	players: Player[];
+	currentRound: number;
+	secretWord: string;
+	category: string;
+	impostorHelp: boolean;
+	textChatEnabled: boolean;
+	individualVotingEnabled: boolean;
+	impostorCount: number;
+	currentPlayerIndex: number;
+	roundResults: RoundResult[];
+	winner: "friends" | "impostor" | null;
 }
 
 export interface RoundResult {
@@ -33,6 +35,9 @@ export interface RoundResult {
   wasTie: boolean
   impostorSurvived: boolean
 }
+
+export const MAX_PLAYERS = 16;
+export const MAX_IMPOSTORS = 4;
 
 export const WORD_BANK: Record<string, string[]> = {
   Animals: ["Dog", "Cat", "Elephant", "Penguin", "Dolphin", "Eagle", "Tiger", "Giraffe", "Octopus", "Bear"],
@@ -64,22 +69,27 @@ export function createPlayer(name: string): Player {
 
 export function createGame(mode: "pass-and-play" | "online"): GameState {
   return {
-    id: generateId(),
-    mode,
-    phase: "setup",
-    players: [],
-    currentRound: 1,
-    maxRounds: 3,
-    secretWord: "",
-    category: "",
-    impostorHelp: false,
-    currentPlayerIndex: 0,
-    roundResults: [],
-    winner: null,
-  }
+		id: generateId(),
+		mode,
+		phase: "setup",
+		players: [],
+		currentRound: 1,
+		secretWord: "",
+		category: "",
+		impostorHelp: false,
+		textChatEnabled: true,
+		individualVotingEnabled: true,
+		impostorCount: 1,
+		currentPlayerIndex: 0,
+		roundResults: [],
+		winner: null,
+  };
 }
 
 export function addPlayer(game: GameState, name: string): GameState {
+	if (game.players.length >= MAX_PLAYERS) {
+		return game;
+	}
   const player = createPlayer(name)
   return { ...game, players: [...game.players, player] }
 }
@@ -95,17 +105,19 @@ export function assignRoles(game: GameState): GameState {
   const secretWord = words[Math.floor(Math.random() * words.length)]
 
   const activePlayers = game.players.filter((p) => !p.isEliminated)
-  const impostorIndex = Math.floor(Math.random() * activePlayers.length)
+	const maxAllowed = getMaxImpostorCount(activePlayers.length);
+	const impostorCount = Math.min(game.impostorCount || 1, maxAllowed);
+	const shuffledPlayerIds = shuffle(activePlayers.map((p) => p.id));
+	const impostorIds = new Set(shuffledPlayerIds.slice(0, impostorCount));
 
   const updatedPlayers = game.players.map((player) => {
-    if (player.isEliminated) return player
-    const activeIndex = activePlayers.findIndex((p) => p.id === player.id)
+    if (player.isEliminated) return player;
     return {
-      ...player,
-      role: activeIndex === impostorIndex ? ("impostor" as const) : ("friend" as const),
-      votedFor: null,
-      clues: [...player.clues],
-    }
+		...player,
+		role: impostorIds.has(player.id) ? ("impostor" as const) : ("friend" as const),
+		votedFor: null,
+		clues: [...player.clues],
+	};
   })
 
   return {
@@ -120,13 +132,17 @@ export function assignRoles(game: GameState): GameState {
 
 export function startCluePhase(game: GameState): GameState {
   return {
-    ...game,
-    phase: "clues",
-    currentPlayerIndex: 0,
-  }
+		...game,
+		phase: game.textChatEnabled ? "clues" : "voting",
+		currentPlayerIndex: 0,
+  };
 }
 
 export function submitClue(game: GameState, playerId: string, clue: string): GameState {
+  if (!game.textChatEnabled) {
+		return game;
+  }
+
   const activePlayers = game.players.filter((p) => !p.isEliminated)
   const currentActiveIndex = activePlayers.findIndex((p) => p.id === playerId)
 
@@ -183,100 +199,115 @@ export function allVotesIn(game: GameState): boolean {
   return activePlayers.every((p) => p.votedFor !== null)
 }
 
-export function resolveRound(game: GameState): GameState {
-  const activePlayers = game.players.filter((p) => !p.isEliminated)
-  const impostor = game.players.find((p) => p.role === "impostor" && !p.isEliminated)!
+export function resolveRound(game: GameState, forcedEliminatedPlayerId?: string): GameState {
+	const activePlayers = game.players.filter((p) => !p.isEliminated);
+	const impostorIds = game.players.filter((p) => p.role === "impostor").map((p) => p.id);
+	if (impostorIds.length === 0) {
+		return game;
+	}
 
-  // Count votes
-  const voteCounts: Record<string, number> = {}
-  activePlayers.forEach((p) => {
-    if (p.votedFor) {
-      voteCounts[p.votedFor] = (voteCounts[p.votedFor] || 0) + 1
-    }
-  })
+	let eliminatedPlayerId: string | null = null;
+	let isTie = false;
 
-  // Find max votes
-  const maxVotes = Math.max(...Object.values(voteCounts))
-  const playersWithMaxVotes = Object.entries(voteCounts).filter(([, count]) => count === maxVotes)
-  const isTie = playersWithMaxVotes.length > 1
+	if (forcedEliminatedPlayerId) {
+		const forcedTarget = activePlayers.find((p) => p.id === forcedEliminatedPlayerId);
+		if (!forcedTarget) {
+			return game;
+		}
+		eliminatedPlayerId = forcedTarget.id;
+	} else {
+		const voteCounts: Record<string, number> = {};
+		activePlayers.forEach((p) => {
+			if (p.votedFor) {
+				voteCounts[p.votedFor] = (voteCounts[p.votedFor] || 0) + 1;
+			}
+		});
 
-  let eliminatedPlayerId: string | null = null
-  let impostorSurvived = true
+		const voteCountValues = Object.values(voteCounts);
+		if (voteCountValues.length === 0) {
+			isTie = true;
+		} else {
+			const maxVotes = Math.max(...voteCountValues);
+			const playersWithMaxVotes = Object.entries(voteCounts).filter(([, count]) => count === maxVotes);
+			isTie = playersWithMaxVotes.length > 1;
+			if (!isTie) {
+				eliminatedPlayerId = playersWithMaxVotes[0][0];
+			}
+		}
+	}
 
-  if (!isTie) {
-    eliminatedPlayerId = playersWithMaxVotes[0][0]
-    impostorSurvived = eliminatedPlayerId !== impostor.id
-  }
+	const impostorEliminatedThisRound = eliminatedPlayerId ? impostorIds.includes(eliminatedPlayerId) : false;
+	const impostorSurvived = !impostorEliminatedThisRound;
 
-  // Build votes record
-  const votes: Record<string, string> = {}
-  activePlayers.forEach((p) => {
-    if (p.votedFor) votes[p.id] = p.votedFor
-  })
+	// Build votes record
+	const votes: Record<string, string> = {};
+	activePlayers.forEach((p) => {
+		if (p.votedFor) votes[p.id] = p.votedFor;
+	});
 
-  const roundResult: RoundResult = {
-    round: game.currentRound,
-    votes,
-    eliminatedPlayer: eliminatedPlayerId,
-    wasTie: isTie,
-    impostorSurvived,
-  }
+	const roundResult: RoundResult = {
+		round: game.currentRound,
+		votes,
+		eliminatedPlayer: eliminatedPlayerId,
+		wasTie: isTie,
+		impostorSurvived,
+	};
 
-  // Calculate scores for this round
-  let updatedPlayers = game.players.map((p) => {
-    if (p.isEliminated) return p
-    const roundScore = calculateRoundScore(p, impostor.id, eliminatedPlayerId, isTie)
-    const newScores = [...p.scores, roundScore]
-    return {
-      ...p,
-      scores: newScores,
-      totalScore: newScores.reduce((a, b) => a + b, 0),
-      votedFor: null,
-    }
-  })
+	// Calculate scores for this round
+	let updatedPlayers = game.players.map((p) => {
+		if (p.isEliminated) return p;
+		const roundScore = calculateRoundScore(p, impostorIds, eliminatedPlayerId, isTie);
+		const newScores = [...p.scores, roundScore];
+		return {
+			...p,
+			scores: newScores,
+			// Keep a cumulative score across matches while staying in the same room/session.
+			totalScore: p.totalScore + roundScore,
+			votedFor: null,
+		};
+	});
 
-  // Eliminate player if no tie
-  if (eliminatedPlayerId) {
-    updatedPlayers = updatedPlayers.map((p) => {
-      if (p.id === eliminatedPlayerId) {
-        return { ...p, isEliminated: true }
-      }
-      return p
-    })
-  }
+	// Eliminate player if no tie
+	if (eliminatedPlayerId) {
+		updatedPlayers = updatedPlayers.map((p) => {
+			if (p.id === eliminatedPlayerId) {
+				return { ...p, isEliminated: true };
+			}
+			return p;
+		});
+	}
 
-  const roundResults = [...game.roundResults, roundResult]
+	const roundResults = [...game.roundResults, roundResult];
 
-  // Check game end conditions
-  const impostorEliminated = eliminatedPlayerId === impostor.id
-  const remainingActivePlayers = updatedPlayers.filter((p) => !p.isEliminated).length;
-  const isLastRound = game.currentRound >= game.maxRounds
+	// Check game end conditions
+	const remainingActivePlayers = updatedPlayers.filter((p) => !p.isEliminated).length;
+	const remainingImpostors = updatedPlayers.filter((p) => p.role === "impostor" && !p.isEliminated).length;
 
-  let gameOver = false
-  let winner: "friends" | "impostor" | null = null
+	let gameOver = false;
+	let winner: "friends" | "impostor" | null = null;
 
-  if (impostorEliminated) {
+	if (remainingImpostors === 0) {
 		gameOver = true;
 		winner = "friends";
-  } else if (remainingActivePlayers <= 2 || isLastRound) {
+	} else if (remainingActivePlayers <= 2) {
 		gameOver = true;
 		winner = "impostor";
-  }
+	}
 
-  // Apply bonuses if game is over
-  if (gameOver) {
-    updatedPlayers = applyBonuses(updatedPlayers, impostor.id, winner!)
-  }
+	// Apply bonuses if game is over
+	if (gameOver) {
+		updatedPlayers = applyBonuses(updatedPlayers, winner!);
+	}
 
-  return {
-    ...game,
-    players: updatedPlayers,
-    roundResults,
-    currentRound: gameOver ? game.currentRound : game.currentRound + 1,
-    phase: gameOver ? "game-over" : "resolution",
-    winner,
-    currentPlayerIndex: 0,
-  }
+	return {
+		...game,
+		players: updatedPlayers,
+		roundResults,
+		currentRound: gameOver ? game.currentRound : game.currentRound + 1,
+		phase: gameOver ? "game-over" : "resolution",
+		winner,
+		currentPlayerIndex: 0,
+	};
 }
 
 export function startNextRound(game: GameState): GameState {
@@ -286,40 +317,35 @@ export function startNextRound(game: GameState): GameState {
 
 	return {
 		...game,
-		phase: "clues",
+		phase: game.textChatEnabled ? "clues" : "voting",
 		currentPlayerIndex: 0,
 	};
 }
 
-function calculateRoundScore(
-  player: Player,
-  impostorId: string,
-  eliminatedId: string | null,
-  isTie: boolean
-): number {
-  if (player.role === "impostor") {
-    // Impostor gets +2 for surviving (tie or friend eliminated)
-    return isTie || eliminatedId !== player.id ? 2 : 0
-  } else {
-    // Friend gets +2 for voting the impostor
-    return player.votedFor === impostorId ? 2 : 0
-  }
+function calculateRoundScore(player: Player, impostorIds: string[], eliminatedId: string | null, isTie: boolean): number {
+	if (player.role === "impostor") {
+		// Impostor gets +2 for surviving (tie or friend eliminated)
+		return isTie || eliminatedId !== player.id ? 2 : 0;
+	} else {
+		// Friend gets +2 for voting an impostor
+		return player.votedFor !== null && impostorIds.includes(player.votedFor) ? 2 : 0;
+	}
 }
 
-function applyBonuses(players: Player[], impostorId: string, winner: "friends" | "impostor"): Player[] {
-  return players.map((p) => {
-    if (p.role === "impostor" && winner === "impostor") {
-      // Impostor bonus +10 for surviving all 3 rounds
-      return { ...p, totalScore: p.totalScore + 10 }
-    } else if (p.role === "friend" && winner === "friends") {
-      // Check if friend voted correctly every round
-      const votedCorrectlyEveryRound = p.scores.every((s) => s === 2)
-      if (votedCorrectlyEveryRound) {
-        return { ...p, totalScore: p.totalScore + 10 }
-      }
-    }
-    return p
-  })
+export function applyBonuses(players: Player[], winner: "friends" | "impostor"): Player[] {
+	return players.map((p) => {
+		if (p.role === "impostor" && winner === "impostor") {
+			// Impostor bonus +10 for winning the match
+			return { ...p, totalScore: p.totalScore + 10 };
+		} else if (p.role === "friend" && winner === "friends") {
+			// Check if friend voted correctly every round
+			const votedCorrectlyEveryRound = p.scores.every((s) => s === 2);
+			if (votedCorrectlyEveryRound) {
+				return { ...p, totalScore: p.totalScore + 10 };
+			}
+		}
+		return p;
+	});
 }
 
 export function getActivePlayersForClues(game: GameState): Player[] {
@@ -342,4 +368,46 @@ export function generateRoomCode(): string {
     code += chars[Math.floor(Math.random() * chars.length)]
   }
   return code
+}
+
+export function getMaxImpostorCount(playerCount: number): number {
+	if (playerCount <= 4) return 1;
+	if (playerCount === 5) return 2;
+	if (playerCount <= 7) return 3;
+	return 4; // 8+
+}
+
+export function replayGame(game: GameState): GameState {
+	const resetPlayers = game.players.map((p) => ({
+		id: p.id,
+		name: p.name,
+		role: null as "friend" | "impostor" | null,
+		isEliminated: false,
+		scores: [],
+		// Preserve cumulative score for players who stay in the same room/session.
+		totalScore: p.totalScore,
+		clues: [],
+		votedFor: null,
+	}));
+
+	return {
+		...createGame(game.mode),
+		id: game.id,
+		players: resetPlayers,
+		impostorHelp: game.impostorHelp,
+		textChatEnabled: game.textChatEnabled,
+		individualVotingEnabled: game.individualVotingEnabled,
+		impostorCount: game.impostorCount,
+	};
+}
+
+function shuffle<T>(items: T[]): T[] {
+	const result = [...items];
+	for (let i = result.length - 1; i > 0; i--) {
+		const j = Math.floor(Math.random() * (i + 1));
+		const temp = result[i];
+		result[i] = result[j];
+		result[j] = temp;
+	}
+	return result;
 }

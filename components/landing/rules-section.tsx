@@ -2,92 +2,85 @@
 
 import { Eye, EyeOff, Users, MessageSquare, Vote, Trophy, Shield, Search } from "lucide-react"
 
+
 const rules = [
-  {
-    icon: Users,
-    title: "Gather Your Friends",
-    description: "You need at least 4 players. One will be secretly assigned as The Impostor.",
-  },
-  {
-    icon: Eye,
-    title: "Learn the Secret",
-    description: "Friends see the secret word. The Impostor gets nothing (or just the category as a hint).",
-  },
-  {
-    icon: MessageSquare,
-    title: "Give Clues",
-    description: "Each player gives a one-word clue about the secret. Be subtle enough to not help the Impostor!",
-  },
-  {
-    icon: Search,
-    title: "Debate & Deduce",
-    description: "Discuss the clues. Who seemed suspicious? Who was too vague or too specific?",
-  },
-  {
-    icon: Vote,
-    title: "Vote to Eliminate",
-    description: "Cast your vote. The player with the most votes is eliminated. Ties mean no one leaves.",
-  },
-  {
-    icon: Trophy,
-    title: "Win the Game",
-    description: "Friends win by voting out the Impostor. The Impostor wins by surviving all 3 rounds.",
-  },
-]
+	{
+		icon: Users,
+		title: "Gather Your Friends",
+		description: "You need at least 3 players. One will be secretly assigned as The Impostor.",
+	},
+	{
+		icon: Eye,
+		title: "Learn the Secret",
+		description: "Friends see the secret word. The Impostor gets nothing (or just the category as a hint).",
+	},
+	{
+		icon: MessageSquare,
+		title: "Give Clues",
+		description: "Each player gives a one-word clue about the secret. Be subtle enough to not help the Impostor!",
+	},
+	{
+		icon: Search,
+		title: "Debate & Deduce",
+		description: "Discuss the clues. Who seemed suspicious? Who was too vague or too specific?",
+	},
+	{
+		icon: Vote,
+		title: "Vote to Eliminate",
+		description: "Cast your vote. The player with the most votes is eliminated. Ties mean no one leaves.",
+	},
+	{
+		icon: Trophy,
+		title: "Win the Game",
+		description: "Friends win by voting out the Impostor. The Impostor wins by surviving all 3 rounds.",
+	},
+];
 
 export function RulesSection() {
   return (
-    <section className="py-20 px-4">
-      <div className="max-w-5xl mx-auto">
-        <div className="text-center mb-16">
-          <p className="text-sm font-mono tracking-widest text-primary uppercase mb-3">
-            How to Play
-          </p>
-          <h2 className="text-3xl md:text-4xl font-bold text-foreground text-balance">
-            Simple Rules, Endless Deception
-          </h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {rules.map((rule, index) => (
-            <div
-              key={rule.title}
-              className="group relative rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/40 hover:bg-card/80"
-            >
-              <div className="flex items-start gap-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <rule.icon className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-mono text-muted-foreground mb-1">
-                    {"Step "}
-                    {index + 1}
-                  </p>
-                  <h3 className="text-base font-semibold text-foreground mb-2">
-                    {rule.title}
-                  </h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {rule.description}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
+		<section className="py-20 px-4 animate-page-enter animate-page-enter-delay-1">
+			<div className="max-w-5xl mx-auto">
+				<div className="text-center mb-16">
+					<p className="text-sm font-mono tracking-widest text-primary uppercase mb-3">How to Play</p>
+					<h2 className="text-3xl md:text-4xl font-bold text-foreground text-balance">Simple Rules, Endless Deception</h2>
+				</div>
+				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+					{rules.map((rule, index) => (
+						<div
+							key={rule.title}
+							className="glow-box rounded-xl p-6 animate-page-enter"
+							style={{ animationDelay: `${Math.min(index * 45, 180)}ms` }}>
+							<div className="flex items-start gap-4">
+								<div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+									<rule.icon className="h-5 w-5" />
+								</div>
+								<div>
+									<p className="text-xs font-mono text-muted-foreground mb-1">
+										{"Step "}
+										{index + 1}
+									</p>
+									<h3 className="text-base font-semibold text-foreground mb-2">{rule.title}</h3>
+									<p className="text-sm text-muted-foreground leading-relaxed">{rule.description}</p>
+								</div>
+							</div>
+						</div>
+					))}
+				</div>
+			</div>
+		</section>
+  );
 }
 
 export function ScoringSection() {
   return (
-		<section className="py-20 px-4 bg-secondary/30">
+		<section className="py-20 px-4 bg-secondary/30 animate-page-enter animate-page-enter-delay-2">
 			<div className="max-w-4xl mx-auto">
 				<div className="text-center mb-12">
 					<p className="text-sm font-mono tracking-widest text-primary uppercase mb-3">Points System</p>
 					<h2 className="text-3xl md:text-4xl font-bold text-foreground text-balance">Every Round Counts</h2>
 				</div>
 				<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-					<div className="rounded-xl border border-success/30 bg-card p-8">
+					<div className="glow-box rounded-xl border-success/30 p-8 animate-page-enter">
 						<div className="flex items-center gap-3 mb-6">
 							<div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/10">
 								<Shield className="h-5 w-5 text-success" />
@@ -108,7 +101,7 @@ export function ScoringSection() {
 						</ul>
 					</div>
 
-					<div className="rounded-xl border border-primary/30 bg-card p-8">
+					<div className="glow-box rounded-xl border-primary/30 p-8 animate-page-enter animate-page-enter-delay-1">
 						<div className="flex items-center gap-3 mb-6">
 							<div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
 								<EyeOff className="h-5 w-5 text-primary" />

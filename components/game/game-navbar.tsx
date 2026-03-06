@@ -6,22 +6,29 @@ import { ArrowLeft } from "lucide-react"
 
 interface GameNavbarProps {
   backHref?: string
+  onBack?: () => void
   title?: string
   subtitle?: React.ReactNode
   round?: number
-  maxRounds?: number
 }
 
-export function GameNavbar({ backHref = "/", title, subtitle, round, maxRounds }: GameNavbarProps) {
+export function GameNavbar({ backHref = "/", onBack, title, subtitle, round }: GameNavbarProps) {
   return (
     <header className="flex items-center gap-3 px-4 py-4 border-b border-border">
       <div className="flex items-center gap-3">
-        <Link href={backHref} aria-label="Back">
-          <Button variant="ghost" size="icon">
+        {onBack ? (
+          <Button variant="ghost" size="icon" onClick={onBack} aria-label="Back">
             <ArrowLeft className="h-5 w-5" />
             <span className="sr-only">Back</span>
           </Button>
-        </Link>
+        ) : (
+          <Link href={backHref} aria-label="Back">
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="h-5 w-5" />
+              <span className="sr-only">Back</span>
+            </Button>
+          </Link>
+        )}
         <div className="mr-2">
           {title ? (
             <h1 className="text-lg font-bold text-foreground">{title}</h1>
@@ -31,13 +38,11 @@ export function GameNavbar({ backHref = "/", title, subtitle, round, maxRounds }
           ) : null}
         </div>
       </div>
-      {typeof round === "number" && typeof maxRounds === "number" && (
+      {typeof round === "number" && (
         <div className="ml-auto">
           <p className="text-xs font-mono tracking-widest text-muted-foreground uppercase mb-0">
             {"Round "}
             {round}
-            {" of "}
-            {maxRounds}
           </p>
         </div>
       )}

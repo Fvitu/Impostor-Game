@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Trophy, Skull, ArrowRight, RotateCcw } from "lucide-react"
 import Link from "next/link"
 import { GameNavbar } from "@/components/game/game-navbar";
+import { saveLocalPlayers, saveResultsGame, clearLocalGameState } from "@/lib/storage";
 
 export function ResolutionPhase() {
 	const { game, dispatch } = useGame();
@@ -21,15 +22,13 @@ export function ResolutionPhase() {
 	});
 	const maxVotesReceived = Math.max(1, ...voteCountByPlayer.map((entry) => entry.receivedVotes));
 
-	const Header = (
-		<GameNavbar backHref="/" title={""} subtitle={"Round " + game.currentRound + " Result"} round={game.currentRound} maxRounds={game.maxRounds} />
-	);
+	const Header = <GameNavbar backHref="/" title={""} subtitle={"Round " + game.currentRound + " Result"} round={game.currentRound} />;
 
 	return (
 		<div className="min-h-dvh flex flex-col">
 			{Header}
 			<div className="flex-1 flex items-center justify-center px-4">
-				<div className="w-full max-w-sm mx-auto text-center animate-slide-up">
+				<div className="w-full max-w-sm mx-auto text-center animate-page-enter">
 					<p className="text-xs font-mono tracking-widest text-muted-foreground uppercase mb-4">
 						{"Round "}
 						{game.currentRound}
@@ -55,7 +54,7 @@ export function ResolutionPhase() {
 									<h2 className="text-2xl font-bold text-success mb-3">Impostor Found!</h2>
 									<p className="text-sm text-muted-foreground mb-2">
 										<span className="font-bold text-foreground">{eliminatedPlayer.name}</span>
-										{" was The Impostor!"}
+										{" was an Impostor!"}
 									</p>
 									<p className="text-sm text-muted-foreground">
 										{"The secret word was "}
@@ -88,7 +87,7 @@ export function ResolutionPhase() {
 									const barWidth = `${(receivedVotes / maxVotesReceived) * 100}%`;
 									const isEliminatedThisRound = lastResult.eliminatedPlayer === player.id;
 									return (
-										<div key={player.id} className="rounded-lg bg-card border border-border px-4 py-3">
+										<div key={player.id} className="glow-box rounded-lg px-4 py-3">
 											<div className="flex items-center justify-between mb-2">
 												<span className="text-sm text-foreground">{player.name}</span>
 												<span className="text-xs text-muted-foreground font-mono">
@@ -112,14 +111,28 @@ export function ResolutionPhase() {
 						<div className="space-y-3">
 							<p className="text-sm text-muted-foreground mb-4">
 								{"Game Over! "}
-								{game.winner === "friends" ? "Friends win!" : "The Impostor wins!"}
+								{game.winner === "friends" ? "Friends win!" : "Impostors win!"}
 							</p>
-							<Link href={`/play/local/results?data=${encodeURIComponent(JSON.stringify(game))}`}>
+							<Link
+								href="/play/local/results"
+								onClick={() => {
+									saveResultsGame(game);
+									saveLocalPlayers(game.players.map((p) => p.name));
+									clearLocalGameState();
+								}}>
 								<Button size="lg" className="w-full h-14 text-base bg-primary text-primary-foreground hover:bg-primary/90">
 									<Trophy className="h-5 w-5 mr-2" />
 									View Final Scores
 								</Button>
 							</Link>
+							<Button
+								onClick={() => dispatch({ type: "REPLAY" })}
+								variant="outline"
+								size="lg"
+								className="w-full h-14 text-base border-border text-foreground hover:bg-secondary hover:text-secondary-foreground mt-2">
+								<RotateCcw className="h-5 w-5 mr-2" />
+								Play Again (Same Players)
+							</Button>
 						</div>
 					) : (
 						<Button
