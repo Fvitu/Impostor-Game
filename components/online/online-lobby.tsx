@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Wifi, UserPlus, Pencil, Check, Clock, DoorOpen, Clipboard } from "lucide-react";
@@ -13,6 +14,7 @@ interface OnlineLobbyProps {
 }
 
 export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
+	const { t } = useTranslation("online");
 	const [mode, setMode] = useState<"choose" | "create" | "join" | "waiting">("choose");
 	const [name, setName] = useState("");
 	const [nameEditable, setNameEditable] = useState(true);
@@ -47,7 +49,7 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 			savePlayerName(name.trim());
 			onJoined(data.code, data.playerId, true);
 		} catch (e: unknown) {
-			setError(e instanceof Error ? e.message : "Failed to create room");
+			setError(e instanceof Error ? e.message : t("lobby.failedCreate"));
 		} finally {
 			setLoading(false);
 		}
@@ -81,7 +83,7 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 				onJoined(data.code, data.playerId, data.status === "joined" && false);
 			}
 		} catch (e: unknown) {
-			setError(e instanceof Error ? e.message : "Failed to join room");
+			setError(e instanceof Error ? e.message : t("lobby.failedJoin"));
 		} finally {
 			setLoading(false);
 		}
@@ -97,7 +99,7 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 					?.join("")
 					.slice(0, 5) ?? "";
 			if (!sanitized) {
-				setError("No valid room code found in clipboard");
+				setError(t("lobby.noValidCode"));
 				return;
 			}
 			setRoomCode(sanitized);
@@ -106,7 +108,7 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 				await handleJoin(sanitized);
 			}
 		} catch (err) {
-			setError("Unable to read from clipboard");
+			setError(t("lobby.clipboardError"));
 		}
 	};
 
@@ -120,7 +122,7 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 					// Room gone or player removed from waiting list
 					clearWaitingSession();
 					setMode("join");
-					setError("The room is no longer available");
+					setError(t("lobby.roomNoLongerAvailable"));
 				}
 				return;
 			}
@@ -139,7 +141,7 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 
 	useEffect(() => {
 		if (mode !== "waiting") return;
-		const interval = setInterval(pollWaiting, 2000);
+		const interval = setInterval(pollWaiting, 4000);
 		return () => clearInterval(interval);
 	}, [mode, pollWaiting]);
 
@@ -163,12 +165,12 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 	const renderNameField = (inputId: string) => (
 		<div>
 			<label htmlFor={inputId} className="block text-sm font-medium text-foreground mb-2">
-				Your Name
+				{t("lobby.yourName")}
 			</label>
 			<div className="flex gap-2">
 				<Input
 					id={inputId}
-					placeholder="Enter your name..."
+					placeholder={t("lobby.enterName")}
 					value={name}
 					onChange={(e) => setName(e.target.value)}
 					maxLength={20}
@@ -182,7 +184,7 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 						size="icon"
 						onClick={() => setNameEditable(true)}
 						className="h-12 w-12 shrink-0 text-muted-foreground hover:text-foreground"
-						aria-label="Edit name">
+						aria-label={t("lobby.editName")}>
 						<Pencil className="h-4 w-4" />
 					</Button>
 				) : name.trim() && getSavedPlayerName() ? (
@@ -194,7 +196,7 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 							setNameEditable(false);
 						}}
 						className="h-12 w-12 shrink-0 text-muted-foreground hover:text-foreground"
-						aria-label="Confirm name">
+						aria-label={t("lobby.confirmName")}>
 						<Check className="h-4 w-4" />
 					</Button>
 				) : null}
@@ -204,28 +206,28 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 
 	return (
 		<div className="min-h-dvh flex flex-col">
-			<GameNavbar backHref="/" title={"Play Online"} subtitle={"Create or join a room"} />
+			<GameNavbar backHref="/" title={t("lobby.title")} subtitle={t("lobby.subtitle")} />
 
 			<div className="flex-1 flex flex-col items-center justify-center px-4 max-w-sm mx-auto w-full">
 				{mode === "choose" && (
 					<div className="w-full space-y-4 animate-slide-up glow-box rounded-xl p-6 transition-all">
 						<div className="text-center mb-8">
 							<Wifi className="h-12 w-12 text-primary mx-auto mb-4" />
-							<h2 className="text-xl font-bold text-foreground">Online Multiplayer</h2>
-							<p className="text-sm text-muted-foreground mt-2">Each player joins from their own device</p>
+							<h2 className="text-xl font-bold text-foreground">{t("lobby.onlineMultiplayer")}</h2>
+							<p className="text-sm text-muted-foreground mt-2">{t("lobby.eachPlayerJoins")}</p>
 						</div>
 						<Button
 							onClick={() => setMode("create")}
 							size="lg"
 							className="w-full h-14 text-base bg-primary text-primary-foreground hover:bg-primary/90">
-							Create a Room
+							{t("lobby.createRoom")}
 						</Button>
 						<Button
 							onClick={() => setMode("join")}
 							size="lg"
 							variant="outline"
 							className="w-full h-14 text-base border-border text-foreground hover:bg-secondary hover:text-secondary-foreground">
-							Join a Room
+							{t("lobby.joinRoom")}
 						</Button>
 					</div>
 				)}
@@ -240,9 +242,9 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 							}}
 							className="mb-6 text-muted-foreground">
 							<ArrowLeft className="h-4 w-4 mr-2" />
-							Back
+							{t("lobby.back")}
 						</Button>
-						<h2 className="text-xl font-bold text-foreground mb-6">Create a Room</h2>
+						<h2 className="text-xl font-bold text-foreground mb-6">{t("lobby.createRoom")}</h2>
 						<div className="space-y-4">
 							{renderNameField("host-name")}
 							{error && <p className="text-sm text-destructive">{error}</p>}
@@ -251,7 +253,7 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 								disabled={!name.trim() || loading}
 								size="lg"
 								className="w-full h-14 text-base bg-primary text-primary-foreground hover:bg-primary/90">
-								{loading ? "Creating..." : "Create Room"}
+								{loading ? t("lobby.creating") : t("lobby.createRoomBtn")}
 							</Button>
 						</div>
 					</div>
@@ -267,19 +269,19 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 							}}
 							className="mb-6 text-muted-foreground">
 							<ArrowLeft className="h-4 w-4 mr-2" />
-							Back
+							{t("lobby.back")}
 						</Button>
-						<h2 className="text-xl font-bold text-foreground mb-6">Join a Room</h2>
+						<h2 className="text-xl font-bold text-foreground mb-6">{t("lobby.joinRoom")}</h2>
 						<div className="space-y-4">
 							{renderNameField("join-name")}
 							<div>
 								<label htmlFor="room-code" className="block text-sm font-medium text-foreground mb-2">
-									Room Code
+									{t("lobby.roomCode")}
 								</label>
 								<div className="flex gap-2 items-center">
 									<Input
 										id="room-code"
-										placeholder="e.g. ABC12"
+										placeholder={t("lobby.roomCodePlaceholder")}
 										value={roomCode}
 										onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
 										maxLength={5}
@@ -292,19 +294,21 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 										onClick={handlePasteFromClipboard}
 										disabled={loading}
 										className="h-12 w-12 shrink-0 text-muted-foreground hover:text-foreground"
-										aria-label="Paste room code from clipboard">
+										aria-label={t("lobby.pasteRoomCode")}>
 										<Clipboard className="h-4 w-4" />
 									</Button>
 								</div>
 							</div>
 							{error && <p className="text-sm text-destructive">{error}</p>}
 							<Button
-								onClick={handleJoin}
+								onClick={() => {
+									void handleJoin();
+								}}
 								disabled={!name.trim() || !roomCode.trim() || loading}
 								size="lg"
 								className="w-full h-14 text-base bg-primary text-primary-foreground hover:bg-primary/90">
 								<UserPlus className="h-5 w-5 mr-2" />
-								{loading ? "Joining..." : "Join Room"}
+								{loading ? t("lobby.joining") : t("lobby.joinRoomBtn")}
 							</Button>
 						</div>
 					</div>
@@ -314,25 +318,21 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 					<div className="w-full space-y-4 animate-slide-up glow-box rounded-xl p-6 transition-all">
 						<div className="text-center">
 							<Clock className="h-12 w-12 text-primary mx-auto mb-4 animate-pulse" />
-							<h2 className="text-xl font-bold text-foreground mb-2">Waiting Room</h2>
+							<h2 className="text-xl font-bold text-foreground mb-2">{t("lobby.waitingRoom")}</h2>
 							<p className="text-sm text-muted-foreground mt-2">
-								A game is in progress in room <span className="font-mono font-bold text-foreground">{waitingRoomCode}</span>
+								{t("lobby.gameInProgress")} <span className="font-mono font-bold text-foreground">{waitingRoomCode}</span>
 							</p>
-							<p className="text-sm text-muted-foreground mt-1">
-								{"You're #"}
-								{waitingPosition}
-								{" on the waiting list. You'll automatically join when the current game ends."}
-							</p>
+							<p className="text-sm text-muted-foreground mt-1">{t("lobby.waitingPosition", { position: waitingPosition })}</p>
 							<div className="mt-6">
 								<div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-								<p className="text-xs text-muted-foreground font-mono">Waiting for game to finish...</p>
+								<p className="text-xs text-muted-foreground font-mono">{t("lobby.waitingForFinish")}</p>
 							</div>
 							<Button
 								variant="outline"
 								onClick={handleLeaveWaitingList}
 								className="mt-6 w-full h-12 border-border text-foreground hover:bg-secondary hover:text-secondary-foreground">
 								<DoorOpen className="h-4 w-4 mr-2" />
-								Leave Waiting Room
+								{t("lobby.leaveWaitingRoom")}
 							</Button>
 						</div>
 					</div>

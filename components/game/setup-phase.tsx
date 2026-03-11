@@ -1,16 +1,20 @@
 "use client"
 
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useGame } from "./game-provider"
 import { MAX_PLAYERS, getMaxImpostorCount } from "@/lib/game-logic";
+import { getCategoryOptions, getCategoryLabel } from "@/lib/game-data";
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
+import { CategoryMultiSelect } from "@/components/game/category-multi-select";
 import { X, UserPlus, Play, Minus, Plus } from "lucide-react";
 import { GameNavbar } from "@/components/game/game-navbar";
 import { getSavedLocalPlayers, clearLocalPlayers } from "@/lib/storage";
 
 export function SetupPhase() {
+  const { t, i18n } = useTranslation("setup");
   const { game, dispatch } = useGame()
   const [name, setName] = useState("")
   const [loadedFromStorage, setLoadedFromStorage] = useState(false);
@@ -47,6 +51,8 @@ export function SetupPhase() {
 
 	const canStart = game.players.length >= 3;
 	const maxImpostors = getMaxImpostorCount(game.players.length);
+	const categoryOptions = getCategoryOptions(i18n.language);
+	const selectedCategoryLabel = getCategoryLabel(game.selectedCategory, i18n.language);
 
 	// Auto-adjust impostor count when player count changes
 	useEffect(() => {
@@ -57,18 +63,18 @@ export function SetupPhase() {
 
   return (
 		<div className="min-h-dvh flex flex-col">
-			<GameNavbar backHref="/" title={"Pass & Play"} subtitle={"Setup your game"} />
+			<GameNavbar backHref="/" title={t("passAndPlay")} subtitle={t("setupYourGame")} />
 
 			<div className="flex-1 px-4 py-6 max-w-lg mx-auto w-full animate-page-enter">
 				{/* Player Input */}
 				<div className="mb-8">
 					<label htmlFor="player-name" className="block text-sm font-medium text-foreground mb-2">
-						Add Players
+						{t("addPlayers")}
 					</label>
 					<div className="flex gap-2">
 						<Input
 							id="player-name"
-							placeholder="Enter player name..."
+							placeholder={t("enterPlayerName")}
 							value={name}
 							onChange={(e) => setName(e.target.value)}
 							onKeyDown={handleKeyDown}
@@ -82,15 +88,12 @@ export function SetupPhase() {
 							size="lg"
 							className="h-12 px-4 bg-primary text-primary-foreground shrink-0">
 							<UserPlus className="h-5 w-5" />
-							<span className="sr-only">Add player</span>
+							<span className="sr-only">{t("addPlayer")}</span>
 						</Button>
 					</div>
 					<p className="text-xs text-muted-foreground mt-2 font-mono">
-						{game.players.length}
-						{"/"}
-						{MAX_PLAYERS}
-						{" players"}
-						{game.players.length < 3 && " (minimum 3)"}
+						{t("common:playerCount", { count: game.players.length, max: MAX_PLAYERS })}
+						{game.players.length < 3 && ` ${t("common:playerCountMinimum")}`}
 					</p>
 				</div>
 
@@ -112,7 +115,7 @@ export function SetupPhase() {
 										onClick={() => dispatch({ type: "REMOVE_PLAYER", playerId: player.id })}
 										className="text-muted-foreground hover:text-destructive">
 										<X className="h-4 w-4" />
-										<span className="sr-only">Remove {player.name}</span>
+										<span className="sr-only">{t("removePlayer", { name: player.name })}</span>
 									</Button>
 								</div>
 							))}
@@ -120,7 +123,7 @@ export function SetupPhase() {
 					)}
 					{game.players.length === 0 && (
 						<div className="rounded-lg border border-dashed border-border py-12 text-center">
-							<p className="text-sm text-muted-foreground">No players yet. Add at least 3 to start.</p>
+							<p className="text-sm text-muted-foreground">{t("noPlayersYet")}</p>
 						</div>
 					)}
 				</div>
@@ -129,10 +132,8 @@ export function SetupPhase() {
 				{game.players.length >= 3 && (
 					<div className="mb-4 glow-box flex items-center justify-between rounded-lg px-4 py-4">
 						<div>
-							<p className="text-sm font-medium text-foreground">Number of Impostors</p>
-							<p className="text-xs text-muted-foreground">
-								Max {maxImpostors} for {game.players.length} players
-							</p>
+							<p className="text-sm font-medium text-foreground">{t("numberOfImpostors")}</p>
+							<p className="text-xs text-muted-foreground">{t("maxImpostorsFor", { max: maxImpostors, count: game.players.length })}</p>
 						</div>
 						<div className="flex items-center gap-2">
 							<Button
@@ -156,27 +157,43 @@ export function SetupPhase() {
 					</div>
 				)}
 
+				<div className="mb-4 glow-box rounded-lg px-4 py-4">
+					<div className="mb-3">
+						<p className="text-sm font-medium text-foreground">{t("wordCategory")}</p>
+						<p className="text-xs text-muted-foreground">{t("wordCategoryDesc")}</p>
+					</div>
+					<CategoryMultiSelect
+						value={game.selectedCategory}
+						onChange={(value) => {
+							dispatch({ type: "SET_CATEGORY_SELECTION", category: value });
+						}}
+						options={categoryOptions}
+						allLabel={t("allCategories")}
+						displayLabel={selectedCategoryLabel}
+					/>
+				</div>
+
 				{/* Impostor Help Toggle */}
 				<div className="mb-8 glow-box flex items-center justify-between rounded-lg px-4 py-4">
 					<div>
-						<p className="text-sm font-medium text-foreground">Impostor Hint</p>
-						<p className="text-xs text-muted-foreground">The Impostor will see the category of the word</p>
+						<p className="text-sm font-medium text-foreground">{t("impostorHint")}</p>
+						<p className="text-xs text-muted-foreground">{t("impostorHintDesc")}</p>
 					</div>
 					<Switch checked={game.impostorHelp} onCheckedChange={(checked) => dispatch({ type: "SET_IMPOSTOR_HELP", help: checked })} />
 				</div>
 
 				<div className="mb-4 glow-box flex items-center justify-between rounded-lg px-4 py-4">
 					<div>
-						<p className="text-sm font-medium text-foreground">Text Chat During Match</p>
-						<p className="text-xs text-muted-foreground">If disabled, players only use revealed roles before voting.</p>
+						<p className="text-sm font-medium text-foreground">{t("textChat")}</p>
+						<p className="text-xs text-muted-foreground">{t("textChatDesc")}</p>
 					</div>
 					<Switch checked={game.textChatEnabled} onCheckedChange={(checked) => dispatch({ type: "SET_TEXT_CHAT_ENABLED", enabled: checked })} />
 				</div>
 
 				<div className="mb-8 glow-box flex items-center justify-between rounded-lg px-4 py-4">
 					<div>
-						<p className="text-sm font-medium text-foreground">Individual Voting</p>
-						<p className="text-xs text-muted-foreground">If disabled, host removes one player directly each round.</p>
+						<p className="text-sm font-medium text-foreground">{t("individualVoting")}</p>
+						<p className="text-xs text-muted-foreground">{t("individualVotingDesc")}</p>
 					</div>
 					<Switch
 						checked={game.individualVotingEnabled}
@@ -186,19 +203,16 @@ export function SetupPhase() {
 
 				{/* Start Game */}
 				<Button
-					onClick={() => dispatch({ type: "START_GAME" })}
+					onClick={() => dispatch({ type: "START_GAME", language: i18n.language, categorySelection: game.selectedCategory })}
 					disabled={!canStart}
 					size="lg"
 					className="w-full h-14 text-base font-bold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40">
 					<Play className="h-5 w-5 mr-2" />
-					{"Start Game"}
+					{t("common:startGame")}
 				</Button>
 				{!canStart && (
 					<p className="text-xs text-center text-muted-foreground mt-3 font-mono">
-						{"Need at least "}
-						{3 - game.players.length}
-						{" more player"}
-						{3 - game.players.length !== 1 ? "s" : ""}
+						{t("common:needMorePlayers", { count: 3 - game.players.length })}
 					</p>
 				)}
 			</div>

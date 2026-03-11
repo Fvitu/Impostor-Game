@@ -1,16 +1,18 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslation } from "react-i18next";
 import { useGame } from "./game-provider"
 import { Button } from "@/components/ui/button"
-import { getActivePlayersForVoting, allVotesIn } from "@/lib/game-logic"
-import { Vote, Check, ChevronRight, MessageSquare, ArrowLeft } from "lucide-react";
-import Link from "next/link";
+import { getActivePlayersForVoting, getRoundStarter, allVotesIn } from "@/lib/game-logic";
+import { Vote, Check, ChevronRight, MessageSquare } from "lucide-react";
 import { GameNavbar } from "@/components/game/game-navbar";
 
 export function VotingPhase() {
+  const { t } = useTranslation("game");
   const { game, dispatch } = useGame()
   const activePlayers = getActivePlayersForVoting(game)
+	const roundStarter = getRoundStarter(game);
   const [currentVoterIndex, setCurrentVoterIndex] = useState(0)
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null)
   const [phase, setPhase] = useState<"pass" | "vote">("pass")
@@ -19,10 +21,10 @@ export function VotingPhase() {
 
   // Gather all clues for this round
   const cluesThisRound = activePlayers.map((p) => ({
-    id: p.id,
-    name: p.name,
-    clue: p.clues[game.currentRound - 1] || "No clue",
-  }))
+		id: p.id,
+		name: p.name,
+		clue: p.clues[game.currentRound - 1] || t("clues.noClue"),
+  }));
 
   const hostControlledVoting = !game.individualVotingEnabled;
 
@@ -31,8 +33,8 @@ export function VotingPhase() {
 			<div className="min-h-dvh flex flex-col">
 				<GameNavbar
 					backHref="/"
-					title={"Host Elimination"}
-					subtitle={"Round " + game.currentRound + " - Select one player"}
+					title={t("voting.hostElimination")}
+					subtitle={t("voting.hostEliminationSubtitle", { round: game.currentRound })}
 					round={game.currentRound}
 				/>
 
@@ -40,7 +42,7 @@ export function VotingPhase() {
 					<div className="max-w-lg w-full py-6 mx-auto flex flex-col animate-page-enter">
 						{game.textChatEnabled && (
 							<div className="mb-6">
-								<p className="text-xs font-mono text-muted-foreground uppercase mb-3">Clue Summary</p>
+								<p className="text-xs font-mono text-muted-foreground uppercase mb-3">{t("voting.clueSummary")}</p>
 								<div className="space-y-2">
 									{cluesThisRound.map((c) => (
 										<div key={c.id} className="glow-box flex items-center gap-3 rounded-lg px-4 py-2.5">
@@ -57,8 +59,9 @@ export function VotingPhase() {
 							</div>
 						)}
 
-						{!game.textChatEnabled && (
-							<p className="text-sm text-muted-foreground text-center mb-4">Text chat is disabled. Choose one player to eliminate this round.</p>
+						{!game.textChatEnabled && <p className="text-sm text-muted-foreground text-center mb-4">{t("voting.textChatDisabled")}</p>}
+						{!game.textChatEnabled && roundStarter && (
+							<p className="text-xs text-center text-muted-foreground mb-6">{t("voting.startingPlayer", { name: roundStarter.name })}</p>
 						)}
 
 						<div className="space-y-2 mb-6">
@@ -88,7 +91,7 @@ export function VotingPhase() {
 							size="lg"
 							className="w-full h-14 text-base bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40">
 							<Vote className="h-5 w-5 mr-2" />
-							Eliminate Selected Player
+							{t("voting.eliminateSelected")}
 						</Button>
 					</div>
 				</div>
@@ -116,13 +119,13 @@ export function VotingPhase() {
 		<div className="min-h-dvh flex flex-col items-center justify-center px-4">
 			<div className="text-center max-w-sm animate-slide-up">
 				<Vote className="h-12 w-12 text-primary mx-auto mb-6 animate-pulse-glow" />
-				<h2 className="text-2xl font-bold text-foreground mb-3">All Votes Are In</h2>
-				<p className="text-sm text-muted-foreground mb-8">Gather everyone around to reveal the results.</p>
+				<h2 className="text-2xl font-bold text-foreground mb-3">{t("voting.allVotesIn")}</h2>
+				<p className="text-sm text-muted-foreground mb-8">{t("voting.gatherEveryone")}</p>
 				<Button
 					onClick={() => dispatch({ type: "RESOLVE_ROUND" })}
 					size="lg"
 					className="w-full h-14 text-base bg-primary text-primary-foreground hover:bg-primary/90">
-					Reveal Results
+					{t("voting.revealResults")}
 				</Button>
 			</div>
 		</div>
@@ -133,14 +136,14 @@ export function VotingPhase() {
 
   return (
 		<div className="min-h-dvh flex flex-col">
-			<GameNavbar backHref="/" title={"Cast Your Vote"} subtitle={"Round " + game.currentRound + " - Voting"} round={game.currentRound} />
+			<GameNavbar backHref="/" title={t("voting.title")} subtitle={t("voting.subtitle", { round: game.currentRound })} round={game.currentRound} />
 
 			<div className="flex-1 flex items-center justify-center px-4">
 				<div className="max-w-lg w-full py-6 mx-auto flex flex-col animate-page-enter">
 					{/* Clue Summary */}
 					{game.textChatEnabled && (
 						<div className="mb-6">
-							<p className="text-xs font-mono text-muted-foreground uppercase mb-3">Clue Summary</p>
+							<p className="text-xs font-mono text-muted-foreground uppercase mb-3">{t("voting.clueSummary")}</p>
 							<div className="space-y-2">
 								{cluesThisRound.map((c) => (
 									<div key={c.id} className="glow-box flex items-center gap-3 rounded-lg px-4 py-2.5">
@@ -161,23 +164,25 @@ export function VotingPhase() {
 					<div className="flex-1 flex flex-col">
 						{phase === "pass" ? (
 							<div className="flex-1 flex flex-col items-center justify-center text-center animate-page-enter animate-page-enter-delay-1">
+								{!game.textChatEnabled && roundStarter && (
+									<p className="text-xs font-mono text-muted-foreground uppercase mb-3">
+										{t("voting.startingPlayer", { name: roundStarter.name })}
+									</p>
+								)}
 								<h2 className="text-2xl font-bold text-foreground mb-2">{currentVoter.name}</h2>
-								<p className="text-sm text-muted-foreground mb-8">Pass the device to this player</p>
+								<p className="text-sm text-muted-foreground mb-8">{t("voting.passDevice")}</p>
 								<Button
 									onClick={() => setPhase("vote")}
 									size="lg"
 									className="w-full max-w-xs h-14 text-base bg-secondary text-secondary-foreground hover:bg-secondary/80">
 									<ChevronRight className="h-5 w-5 mr-2" />
-									{"I'm Ready to Vote"}
+									{t("voting.imReadyToVote")}
 								</Button>
 							</div>
 						) : (
 							<div className="animate-slide-up">
-								<p className="text-sm text-muted-foreground mb-1 text-center">
-									{currentVoter.name}
-									{", who is The Impostor?"}
-								</p>
-								<p className="text-xs text-center text-muted-foreground mb-6">Tap a player to select, then confirm</p>
+								<p className="text-sm text-muted-foreground mb-1 text-center">{t("voting.whoIsImpostorName", { name: currentVoter.name })}</p>
+								<p className="text-xs text-center text-muted-foreground mb-6">{t("voting.tapToSelect")}</p>
 								<div className="space-y-2 mb-6">
 									{activePlayers
 										.filter((p) => p.id !== currentVoter.id)
@@ -201,7 +206,7 @@ export function VotingPhase() {
 									size="lg"
 									className="w-full h-14 text-base bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40">
 									<Vote className="h-5 w-5 mr-2" />
-									Confirm Vote
+									{t("voting.confirmVote")}
 								</Button>
 							</div>
 						)}

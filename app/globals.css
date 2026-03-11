@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.12 0.01 260);
+  --background: oklch(0.12 0.01 260 / 0.96);
   --foreground: oklch(0.95 0.01 260);
   --card: oklch(0.16 0.01 260);
   --card-foreground: oklch(0.95 0.01 260);
@@ -363,4 +363,7 @@ body>*:not(.pointer-grid-overlay) {
 .page-footer {
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
+  /* Slightly darker opaque surface so the grid stays hidden but
+     the `.glow-box` pseudo-elements (mouse-follow red glow) remain visible. */
+  background: color-mix(in oklab, black 12%, var(--card));
 }

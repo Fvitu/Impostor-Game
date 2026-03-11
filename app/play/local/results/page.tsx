@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react";
+import { useTranslation } from 'react-i18next';
 import { useRouter } from "next/navigation";
 import { Scoreboard } from "@/components/game/scoreboard"
 import type { GameState } from "@/lib/game-logic"
@@ -11,6 +12,7 @@ import { getResultsGame, clearResultsGame, saveLocalGameState } from "@/lib/stor
 import { replayGame } from "@/lib/game-logic";
 
 export default function LocalResultsPage() {
+	const { t } = useTranslation('common');
 	const router = useRouter();
 	const [game, setGame] = useState<GameState | null>(null);
 	const [loaded, setLoaded] = useState(false);
@@ -35,11 +37,11 @@ export default function LocalResultsPage() {
 		return (
 			<div className="min-h-dvh bg-background flex items-center justify-center px-4">
 				<div className="text-center animate-page-enter">
-					<p className="text-sm text-muted-foreground mb-4">No game data found.</p>
+					<p className="text-sm text-muted-foreground mb-4">{t('noGameData')}</p>
 					<Button asChild variant="outline" className="border-border text-foreground hover:bg-secondary hover:text-secondary-foreground">
 						<Link href="/">
 							<Home className="h-4 w-4 mr-2" />
-							Back to Home
+							{t('backToHome')}
 						</Link>
 					</Button>
 				</div>

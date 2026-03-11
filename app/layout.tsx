@@ -1,9 +1,12 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { PointerGridOverlay } from '@/components/ui/pointer-grid-overlay'
 import { GlowTracker } from '@/components/ui/glow-tracker'
 import { SessionRedirect } from "@/components/session-redirect";
+import { I18nProvider } from "@/components/i18n-provider";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -13,9 +16,15 @@ export const metadata: Metadata = {
 	title: "The Impostor - Party Game",
 	description:
 		"A thrilling multiplayer party game. Find the impostor among your friends or survive undetected. Play online or pass-and-play on a single device.",
+	manifest: "/manifest.json",
 	icons: {
 		icon: "/Impostor-icon.png",
-		apple: "/Impostor-icon.png",
+		apple: "/apple-touch-icon.png",
+	},
+	appleWebApp: {
+		capable: true,
+		statusBarStyle: "black-translucent",
+		title: "The Impostor",
 	},
 };
 
@@ -35,11 +44,15 @@ export default function RootLayout({
   return (
 		<html lang="en" className="dark">
 			<body className="font-sans antialiased min-h-dvh">
-				<SessionRedirect />
-				{children}
+				<I18nProvider>
+					<SessionRedirect />
+					{children}
+					<LanguageSwitcher />
+				</I18nProvider>
 				<PointerGridOverlay />
 				<GlowTracker />
 				<Analytics />
+				<SpeedInsights />
 			</body>
 		</html>
   );

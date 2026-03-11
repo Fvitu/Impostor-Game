@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getRoom, updateHeartbeat, checkAndSetDisconnectPause, getWaitingListPosition } from "@/lib/room-store";
+import { getRoom, touchRoom, updateRoomHeartbeat } from "@/lib/room-store";
 import type { GameState, Player } from "@/lib/game-logic"
+
+export const runtime = "nodejs";
 
 // Sanitize game state so players can't see each other's roles during active play
 function sanitizeGameState(game: GameState, requestingPlayerId: string): GameState {
@@ -40,7 +42,7 @@ export async function GET(request: NextRequest) {
 		return NextResponse.json({ error: "Room code required" }, { status: 400 });
 	}
 
-	const room = getRoom(code.toUpperCase());
+	const room = await getRoom(code.toUpperCase());
 	if (!room) {
 		return NextResponse.json({ error: "Room not found" }, { status: 404 });
 	}
@@ -52,11 +54,12 @@ export async function GET(request: NextRequest) {
 
 	// Handle waiting list player polling
 	if (wid) {
-		const pos = getWaitingListPosition(code, wid);
+		const pos = room.waitingList.findIndex((waitingPlayer) => waitingPlayer.id === wid);
 		if (pos < 0) {
 			// Not on waiting list anymore - check if promoted to game
 			const inGame = room.game.players.some((p) => p.id === wid);
 			if (inGame) {
+				await touchRoom(room.code);
 				return NextResponse.json({
 					promoted: true,
 					playerId: wid,
@@ -67,9 +70,10 @@ export async function GET(request: NextRequest) {
 			}
 			return NextResponse.json({ error: "Not on waiting list" }, { status: 404 });
 		}
+		await touchRoom(room.code);
 		return NextResponse.json({
 			waiting: true,
-			position: pos,
+			position: pos + 1,
 			totalWaiting: room.waitingList.length,
 			roomPhase: room.game.phase,
 			playerCount: room.game.players.length,
@@ -82,17 +86,27 @@ export async function GET(request: NextRequest) {
 		if (room.kickedPlayerIds.includes(pid)) {
 			return NextResponse.json({ error: "You were removed from this room" }, { status: 410 });
 		}
-		updateHeartbeat(code.toUpperCase(), pid);
-		// Check for disconnected players and set pause if needed
-		checkAndSetDisconnectPause(room);
-	}
 
-	const sanitizedGame = pid ? sanitizeGameState(room.game, pid) : room.game;
+		const updatedRoom = await updateRoomHeartbeat(room.code, pid);
+		if (!updatedRoom) {
+			return NextResponse.json({ error: "Room not found" }, { status: 404 });
+		}
+
+		const sanitizedGame = sanitizeGameState(updatedRoom.game, pid);
+
+		return NextResponse.json({
+			code: updatedRoom.code,
+			hostId: updatedRoom.hostId,
+			game: updatedRoom.game.phase === "setup" ? updatedRoom.game : sanitizedGame,
+			disconnectPause: updatedRoom.disconnectPause,
+			waitingListCount: updatedRoom.waitingList.length,
+		});
+	}
 
 	return NextResponse.json({
 		code: room.code,
 		hostId: room.hostId,
-		game: room.game.phase === "setup" ? room.game : sanitizedGame,
+		game: room.game,
 		disconnectPause: room.disconnectPause,
 		waitingListCount: room.waitingList.length,
 	});

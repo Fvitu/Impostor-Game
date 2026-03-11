@@ -4,3 +4,20 @@ node_modules/
 .env*.local
 .DS_Store
 .agents/
+
+# PWA generated files
+public/sw.js
+public/sw.js.map
+public/workbox-*.js
+public/workbox-*.js.map
+public/swe-worker-*.js
+public/swe-worker-*.js.map
+# Added by ggshield
+.cache_ggshield
+
+# Local environment files
+.env
+.vercel
+
+# Build files
+tsconfig.tsbuildinfo

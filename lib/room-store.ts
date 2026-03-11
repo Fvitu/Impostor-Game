@@ -1,23 +1,29 @@
-// In-memory room store for online multiplayer
-// In production, this would be backed by Redis or a database
-
-import type { GameState, Player } from "./game-logic"
+import type { GameState } from "./game-logic";
 import {
+	MAX_PLAYERS,
+	allVotesIn,
+	applyBonuses,
+	assignRoles,
 	createGame,
 	createPlayer,
-	assignRoles,
+	generateRoomCode,
+	getActivePlayersForClues,
+	getMaxImpostorCount,
 	replayGame,
+	resolveRound,
 	startNextRound as startNextRoundState,
 	submitClue,
 	submitVote,
-	resolveRound,
-	allVotesIn,
-	generateRoomCode,
-	MAX_PLAYERS,
-	applyBonuses,
 } from "./game-logic";
+import { DEFAULT_CATEGORY_SELECTION, isCategorySelection, migrateCategorySelection, type GameCategorySelection } from "./game-data";
+import type { SupportedLanguage } from "./i18n";
+import { getRedisClient } from "./redis";
 
-const DISCONNECT_THRESHOLD = 10_000; // 10 seconds without heartbeat
+const DISCONNECT_THRESHOLD = 15_000;
+const ROOM_TTL_SECONDS = 10 * 60;
+const ENDED_ROOM_TTL_SECONDS = 10;
+const ROOM_KEY_PREFIX = "impostor:room:";
+const ROOM_UPDATE_MAX_RETRIES = 5;
 
 export interface DisconnectPause {
 	playerId: string;
@@ -49,122 +55,248 @@ export interface Room {
 	ended: boolean;
 }
 
-// In-memory store (resets on server restart)
-const rooms = new Map<string, Room>()
-
-// Cleanup old rooms every 5 minutes
-if (typeof setInterval !== "undefined") {
-  setInterval(() => {
-    const now = Date.now()
-    for (const [code, room] of rooms) {
-      if (now - room.lastActivity > 30 * 60 * 1000) {
-        rooms.delete(code)
-      }
-    }
-  }, 5 * 60 * 1000)
-}
-
-export function createRoom(hostName: string): { room: Room; playerId: string } {
-  const code = generateRoomCode()
-  const game = createGame("online")
-  const host = createPlayer(hostName)
-  game.players.push(host)
-
-  const room: Room = {
-		code,
-		hostId: host.id,
-		originalHostId: host.id,
-		game,
-		lastActivity: Date.now(),
-		impostorHelp: false,
-		textChatEnabled: true,
-		playerHeartbeats: { [host.id]: Date.now() },
-		disconnectPause: null,
-		originalPlayerIds: [],
-		kickedPlayerIds: [],
-		leftPlayerNames: [],
-		voluntaryLeftPlayerNames: [],
-		waitingList: [],
-		ended: false,
-  };
-
-  rooms.set(code, room)
-  return { room, playerId: host.id }
-}
-
-export function getRoom(code: string): Room | undefined {
-  const room = rooms.get(code.toUpperCase())
-  if (room) room.lastActivity = Date.now()
-  return room
-}
-
 export type JoinRoomResult =
 	| { type: "joined"; room: Room; playerId: string }
 	| { type: "rejoined"; room: Room; playerId: string }
 	| { type: "waiting"; room: Room; waitingPlayerId: string; position: number }
 	| { type: "blocked"; reason: string };
 
-export function joinRoom(code: string, playerName: string): JoinRoomResult | null {
-	const room = getRoom(code.toUpperCase());
-	if (!room) return null;
-	if (room.ended) return null;
+function normalizeCode(code: string): string {
+	return code.toUpperCase().trim();
+}
 
-	const nameLower = playerName.toLowerCase();
+function getRoomKey(code: string): string {
+	return `${ROOM_KEY_PREFIX}${normalizeCode(code)}`;
+}
 
-	// Check if player was kicked - blocked (kicks are permanent)
-	const kickedPlayer = room.game.players.find((p) => p.name.toLowerCase() === nameLower && room.kickedPlayerIds.includes(p.id));
-	if (kickedPlayer) {
+function addUnique<T>(items: T[], value: T): void {
+	if (!items.includes(value)) {
+		items.push(value);
+	}
+}
+
+function getPlayerNameKey(name: string): string {
+	return name.toLowerCase();
+}
+
+function getPresentPlayers(room: Room) {
+	return room.game.players.filter((player) => {
+		const playerNameKey = getPlayerNameKey(player.name);
+		return !room.kickedPlayerIds.includes(player.id) && !room.voluntaryLeftPlayerNames.includes(playerNameKey);
+	});
+}
+
+function ensureHost(room: Room): void {
+	if (room.game.players.some((player) => player.id === room.hostId)) {
+		return;
+	}
+
+	const activePresentPlayers = getPresentPlayers(room).filter((player) => !player.isEliminated);
+	if (activePresentPlayers.length > 0) {
+		room.hostId = activePresentPlayers[0].id;
+		return;
+	}
+
+	const presentPlayers = getPresentPlayers(room);
+	if (presentPlayers.length > 0) {
+		room.hostId = presentPlayers[0].id;
+	}
+}
+
+function promoteWaitingPlayersIntoSetup(room: Room): void {
+	if (room.game.phase !== "setup") return;
+
+	while (room.game.players.length < MAX_PLAYERS && room.waitingList.length > 0) {
+		const waitingPlayer = room.waitingList.shift();
+		if (!waitingPlayer) break;
+
+		const nameKey = getPlayerNameKey(waitingPlayer.name);
+		if (room.game.players.some((player) => player.id === waitingPlayer.id || getPlayerNameKey(player.name) === nameKey)) {
+			continue;
+		}
+
+		const player = createPlayer(waitingPlayer.name);
+		player.id = waitingPlayer.id;
+		room.game.players.push(player);
+		room.playerHeartbeats[player.id] = Date.now();
+	}
+}
+
+function shouldDeleteRoom(room: Room): boolean {
+	return getPresentPlayers(room).length === 0 && room.waitingList.length === 0;
+}
+
+async function loadRoom(code: string): Promise<Room | undefined> {
+	const redis = await getRedisClient();
+	const raw = await redis.get(getRoomKey(code));
+	if (!raw) return undefined;
+
+	try {
+		const parsed = JSON.parse(raw) as Partial<Room>;
+		if (!parsed || typeof parsed !== "object" || !parsed.game || !parsed.hostId || !parsed.code) {
+			await redis.del(getRoomKey(code));
+			return undefined;
+		}
+
+		return {
+			...parsed,
+			code: normalizeCode(parsed.code),
+			originalHostId: parsed.originalHostId ?? parsed.hostId,
+			lastActivity: parsed.lastActivity ?? Date.now(),
+			impostorHelp: parsed.impostorHelp ?? false,
+			textChatEnabled: parsed.textChatEnabled ?? true,
+			playerHeartbeats: parsed.playerHeartbeats ?? {},
+			disconnectPause: parsed.disconnectPause ?? null,
+			originalPlayerIds: parsed.originalPlayerIds ?? [],
+			kickedPlayerIds: parsed.kickedPlayerIds ?? [],
+			leftPlayerNames: parsed.leftPlayerNames ?? [],
+			voluntaryLeftPlayerNames: parsed.voluntaryLeftPlayerNames ?? [],
+			waitingList: parsed.waitingList ?? [],
+			ended: parsed.ended ?? false,
+		} as Room;
+	} catch {
+		await redis.del(getRoomKey(code));
+		return undefined;
+	}
+}
+
+export async function saveRoom(room: Room, ttlSeconds: number = ROOM_TTL_SECONDS): Promise<Room> {
+	room.lastActivity = Date.now();
+	const redis = await getRedisClient();
+	await redis.set(getRoomKey(room.code), JSON.stringify(room), { EX: ttlSeconds });
+	return room;
+}
+
+export async function deleteRoom(code: string): Promise<void> {
+	const redis = await getRedisClient();
+	await redis.del(getRoomKey(code));
+}
+
+export async function touchRoom(code: string, ttlSeconds: number = ROOM_TTL_SECONDS): Promise<void> {
+	const redis = await getRedisClient();
+	await redis.expire(getRoomKey(code), ttlSeconds);
+}
+
+async function finalizeRoomUpdate(room: Room, ttlSeconds: number = ROOM_TTL_SECONDS): Promise<Room | null> {
+	promoteWaitingPlayersIntoSetup(room);
+	ensureHost(room);
+
+	if (shouldDeleteRoom(room)) {
+		await deleteRoom(room.code);
+		return null;
+	}
+
+	return saveRoom(room, ttlSeconds);
+}
+
+async function tryCreateRoom(room: Room): Promise<boolean> {
+	const redis = await getRedisClient();
+	const result = await redis.set(getRoomKey(room.code), JSON.stringify(room), { EX: ROOM_TTL_SECONDS, NX: true });
+	return result === "OK";
+}
+
+function evaluateGameOver(room: Room): void {
+	const remainingActive = room.game.players.filter((player) => !player.isEliminated);
+	const remainingImpostors = remainingActive.filter((player) => player.role === "impostor");
+
+	if (remainingImpostors.length === 0) {
+		room.game.phase = "game-over";
+		room.game.winner = "friends";
+		room.game.players = applyBonuses(room.game.players, "friends");
+	} else if (remainingActive.length <= 2) {
+		room.game.phase = "game-over";
+		room.game.winner = "impostor";
+		room.game.players = applyBonuses(room.game.players, "impostor");
+	}
+}
+
+export async function createRoom(hostName: string): Promise<{ room: Room; playerId: string }> {
+	for (let attempt = 0; attempt < 20; attempt++) {
+		const code = generateRoomCode();
+		const game = createGame("online");
+		const host = createPlayer(hostName);
+		game.players.push(host);
+
+		const room: Room = {
+			code,
+			hostId: host.id,
+			originalHostId: host.id,
+			game,
+			lastActivity: Date.now(),
+			impostorHelp: false,
+			textChatEnabled: true,
+			playerHeartbeats: { [host.id]: Date.now() },
+			disconnectPause: null,
+			originalPlayerIds: [],
+			kickedPlayerIds: [],
+			leftPlayerNames: [],
+			voluntaryLeftPlayerNames: [],
+			waitingList: [],
+			ended: false,
+		};
+
+		if (await tryCreateRoom(room)) {
+			return { room, playerId: host.id };
+		}
+	}
+
+	throw new Error("Failed to generate a unique room code");
+}
+
+export async function getRoom(code: string): Promise<Room | undefined> {
+	return loadRoom(code);
+}
+
+export async function joinRoom(code: string, playerName: string): Promise<JoinRoomResult | null> {
+	const room = await loadRoom(code);
+	if (!room || room.ended) return null;
+
+	const nameLower = getPlayerNameKey(playerName);
+	const wasVoluntary = room.voluntaryLeftPlayerNames.includes(nameLower);
+	const kickedPlayer = room.game.players.find((player) => player.name.toLowerCase() === nameLower && room.kickedPlayerIds.includes(player.id));
+	if (kickedPlayer && !wasVoluntary) {
 		return { type: "blocked", reason: "You were removed from this room" };
 	}
 
-	// Setup phase - normal join
 	if (room.game.phase === "setup") {
 		if (room.game.players.length >= MAX_PLAYERS) return null;
-		if (room.game.players.some((p) => p.name.toLowerCase() === nameLower)) return null;
+		if (room.game.players.some((player) => player.name.toLowerCase() === nameLower)) return null;
 
 		const player = createPlayer(playerName);
 		room.game.players.push(player);
 		room.playerHeartbeats[player.id] = Date.now();
-		room.lastActivity = Date.now();
+		await finalizeRoomUpdate(room);
 		return { type: "joined", room, playerId: player.id };
 	}
 
-	// Game in progress - check for rejoin (original player returning)
-	const existingPlayer = room.game.players.find((p) => p.name.toLowerCase() === nameLower);
-
+	const existingPlayer = room.game.players.find((player) => player.name.toLowerCase() === nameLower);
 	if (existingPlayer) {
 		const isOriginal = room.originalPlayerIds.includes(existingPlayer.id);
-		const wasVoluntary = room.voluntaryLeftPlayerNames.includes(nameLower);
 
-		// Allow rejoin for original players or those who left voluntarily (but not for kicked players)
-		if ((isOriginal || wasVoluntary) && !room.kickedPlayerIds.includes(existingPlayer.id)) {
+		if ((isOriginal || wasVoluntary) && (wasVoluntary || !room.kickedPlayerIds.includes(existingPlayer.id))) {
 			room.playerHeartbeats[existingPlayer.id] = Date.now();
 
-			// If this was the original host, transfer host back
 			if (existingPlayer.id === room.originalHostId && room.hostId !== existingPlayer.id) {
 				room.hostId = existingPlayer.id;
 			}
 
-			// Clear disconnect pause if it was for this player
 			if (room.disconnectPause?.playerId === existingPlayer.id) {
 				room.disconnectPause = null;
 			}
 
-			// Restore player if they were marked eliminated due to leaving
-			room.game.players = room.game.players.map((p) => (p.id === existingPlayer.id ? { ...p, isEliminated: false } : p));
+			room.game.players = room.game.players.map((player) => (player.id === existingPlayer.id ? { ...player, isEliminated: false } : player));
 
-			// Remove voluntary-left marker if present
 			if (wasVoluntary) {
-				room.voluntaryLeftPlayerNames = room.voluntaryLeftPlayerNames.filter((n) => n !== nameLower);
+				room.voluntaryLeftPlayerNames = room.voluntaryLeftPlayerNames.filter((name) => name !== nameLower);
+				room.kickedPlayerIds = room.kickedPlayerIds.filter((id) => id !== existingPlayer.id);
 			}
 
-			room.lastActivity = Date.now();
+			await finalizeRoomUpdate(room);
 			return { type: "rejoined", room, playerId: existingPlayer.id };
 		}
 	}
 
-	// Game in progress, new player - add to waiting list
-	const alreadyWaiting = room.waitingList.find((w) => w.name.toLowerCase() === nameLower);
+	const alreadyWaiting = room.waitingList.find((waitingPlayer) => waitingPlayer.name.toLowerCase() === nameLower);
 	if (alreadyWaiting) {
 		return { type: "blocked", reason: "You are already on the waiting list for this room" };
 	}
@@ -174,39 +306,50 @@ export function joinRoom(code: string, playerName: string): JoinRoomResult | nul
 	}
 
 	const waitingPlayer: WaitingPlayer = {
-		id: Math.random().toString(36).substring(2, 9),
+		id: crypto.randomUUID(),
 		name: playerName,
 		joinedAt: Date.now(),
 	};
 	room.waitingList.push(waitingPlayer);
-	room.lastActivity = Date.now();
+	await finalizeRoomUpdate(room);
 	return { type: "waiting", room, waitingPlayerId: waitingPlayer.id, position: room.waitingList.length };
 }
 
-export function startRoomGame(code: string, hostId: string, impostorHelp: boolean, textChatEnabled: boolean, impostorCount: number = 1): Room | null {
-	const room = getRoom(code);
+export async function startRoomGame(
+	code: string,
+	hostId: string,
+	impostorHelp: boolean,
+	textChatEnabled: boolean,
+	impostorCount: number = 1,
+	categorySelection?: GameCategorySelection,
+	language: SupportedLanguage | string = "en",
+): Promise<Room | null> {
+	const room = await loadRoom(code);
 	if (!room || room.hostId !== hostId) return null;
 	if (room.game.players.length < 3) return null;
+
+	const requestedCategorySelection = categorySelection ?? room.game.selectedCategory;
+	const resolvedCategorySelection = migrateCategorySelection(requestedCategorySelection);
 
 	room.impostorHelp = impostorHelp;
 	room.textChatEnabled = textChatEnabled;
 	room.game.impostorHelp = impostorHelp;
 	room.game.textChatEnabled = textChatEnabled;
 	room.game.impostorCount = impostorCount;
-	room.originalPlayerIds = room.game.players.map((p) => p.id);
+	room.game.selectedCategory = resolvedCategorySelection;
+	room.originalPlayerIds = room.game.players.map((player) => player.id);
 	room.originalHostId = room.hostId;
-	room.game = assignRoles(room.game);
+	room.game = assignRoles(room.game, { language, categorySelection: resolvedCategorySelection });
 	room.game.phase = "clues";
-	room.lastActivity = Date.now();
-	return room;
+	return finalizeRoomUpdate(room);
 }
 
-export function updateRoomSettings(
+export async function updateRoomSettings(
 	code: string,
 	hostId: string,
-	settings: { impostorHelp?: boolean; textChatEnabled?: boolean; impostorCount?: number },
-): Room | null {
-	const room = getRoom(code);
+	settings: { impostorHelp?: boolean; textChatEnabled?: boolean; impostorCount?: number; categorySelection?: unknown },
+): Promise<Room | null> {
+	const room = await loadRoom(code);
 	if (!room || room.hostId !== hostId) return null;
 	if (room.game.phase !== "setup") return null;
 
@@ -221,117 +364,198 @@ export function updateRoomSettings(
 	}
 
 	if (typeof settings.impostorCount === "number") {
-		room.game.impostorCount = Math.max(1, Math.floor(settings.impostorCount));
+		const maxImpostors = getMaxImpostorCount(room.game.players.length);
+		room.game.impostorCount = Math.max(1, Math.min(maxImpostors, Math.floor(settings.impostorCount)));
 	}
 
-	room.lastActivity = Date.now();
-	return room;
+	if (settings.categorySelection !== undefined) {
+		room.game.selectedCategory = migrateCategorySelection(settings.categorySelection);
+	}
+
+	return finalizeRoomUpdate(room);
 }
 
-export function submitRoomClue(code: string, playerId: string, clue: string): Room | null {
-  const room = getRoom(code)
-  if (!room || room.game.phase !== "clues") return null
-  if (!room.game.textChatEnabled) return null;
+export async function submitRoomClue(code: string, playerId: string, clue: string): Promise<Room | null> {
+	const room = await loadRoom(code);
+	if (!room || room.game.phase !== "clues") return null;
+	if (!room.game.textChatEnabled) return null;
 
-  const activePlayers = room.game.players.filter((p) => !p.isEliminated)
-  const currentPlayer = activePlayers[room.game.currentPlayerIndex]
-  if (!currentPlayer || currentPlayer.id !== playerId) return null
+	const activePlayers = getActivePlayersForClues(room.game);
+	const currentPlayer = activePlayers[room.game.currentPlayerIndex];
+	if (!currentPlayer || currentPlayer.id !== playerId) return null;
 
-  room.game = submitClue(room.game, playerId, clue)
-  room.lastActivity = Date.now()
-  return room
+	room.game = submitClue(room.game, playerId, clue);
+	return finalizeRoomUpdate(room);
 }
 
-export function startRoomVoting(code: string, hostId: string): Room | null {
-	const room = getRoom(code);
+export async function startRoomVoting(code: string, hostId: string): Promise<Room | null> {
+	const room = await loadRoom(code);
 	if (!room || room.hostId !== hostId) return null;
 	if (room.game.phase !== "clues") return null;
 	if (room.game.textChatEnabled) return null;
 
 	room.game.phase = "voting";
-	room.lastActivity = Date.now();
-	return room;
+	return finalizeRoomUpdate(room);
 }
 
-export function submitRoomVote(code: string, voterId: string, targetId: string): Room | null {
-  const room = getRoom(code)
-  if (!room || room.game.phase !== "voting") return null
+export async function submitRoomVote(code: string, voterId: string, targetId: string): Promise<Room | null> {
+	const room = await loadRoom(code);
+	if (!room || room.game.phase !== "voting") return null;
 
-  const voter = room.game.players.find((p) => p.id === voterId);
-  const target = room.game.players.find((p) => p.id === targetId);
+	const voter = room.game.players.find((player) => player.id === voterId);
+	const target = room.game.players.find((player) => player.id === targetId);
+	if (!voter || voter.isEliminated) return null;
+	if (!target || target.isEliminated) return null;
+	if (voterId === targetId) return null;
 
-  if (!voter || voter.isEliminated) return null;
-  if (!target || target.isEliminated) return null;
-  if (voterId === targetId) return null;
+	room.game = submitVote(room.game, voterId, targetId);
+	if (allVotesIn(room.game)) {
+		room.game = resolveRound(room.game);
+	}
 
-  room.game = submitVote(room.game, voterId, targetId)
-
-  // Auto-resolve when all votes are in
-  if (allVotesIn(room.game)) {
-    room.game = resolveRound(room.game)
-  }
-
-  room.lastActivity = Date.now()
-  return room
+	return finalizeRoomUpdate(room);
 }
 
-export function startNextRound(code: string, hostId: string): Room | null {
-  const room = getRoom(code)
-  if (!room || room.hostId !== hostId) return null
-  if (room.game.phase !== "resolution") return null;
+export async function startNextRound(code: string, hostId: string): Promise<Room | null> {
+	const room = await loadRoom(code);
+	if (!room || room.hostId !== hostId) return null;
+	if (room.game.phase !== "resolution") return null;
 
-  room.game = startNextRoundState(room.game);
-  room.lastActivity = Date.now()
-  return room
+	room.game = startNextRoundState(room.game);
+	return finalizeRoomUpdate(room);
 }
 
-export function removePlayerFromRoom(code: string, hostId: string, playerId: string): Room | null {
-  const room = getRoom(code)
-  if (!room || room.hostId !== hostId) return null
-  if (room.game.phase !== "setup") return null
-	const targetPlayer = room.game.players.find((p) => p.id === playerId);
-	room.game.players = room.game.players.filter((p) => p.id !== playerId);
+export async function removePlayerFromRoom(code: string, hostId: string, playerId: string): Promise<Room | null> {
+	const room = await loadRoom(code);
+	if (!room || room.hostId !== hostId) return null;
+	if (room.game.phase !== "setup") return null;
+
+	const targetPlayer = room.game.players.find((player) => player.id === playerId);
+	room.game.players = room.game.players.filter((player) => player.id !== playerId);
 	delete room.playerHeartbeats[playerId];
-	// Track as kicked so the client can detect and redirect the removed player
-	room.kickedPlayerIds.push(playerId);
-	if (targetPlayer) room.leftPlayerNames.push(targetPlayer.name.toLowerCase());
-  room.lastActivity = Date.now()
-  return room
+	addUnique(room.kickedPlayerIds, playerId);
+	if (targetPlayer) {
+		addUnique(room.leftPlayerNames, getPlayerNameKey(targetPlayer.name));
+	}
+	return finalizeRoomUpdate(room);
 }
 
-// ─── Heartbeat & Disconnect ─────────────────────────────────────────
+export function updateHeartbeat(room: Room, playerId: string): void {
+	if (!room.game.players.some((player) => player.id === playerId)) return;
 
-export function updateHeartbeat(code: string, playerId: string): void {
-	const room = rooms.get(code.toUpperCase());
-	if (room && room.game.players.some((p) => p.id === playerId)) {
-		room.playerHeartbeats[playerId] = Date.now();
+	room.playerHeartbeats[playerId] = Date.now();
 
-		// If this player was the one we're paused for and they came back, clear the pause
-		if (room.disconnectPause && room.disconnectPause.playerId === playerId) {
-			room.disconnectPause = null;
-		}
+	if (room.disconnectPause?.playerId === playerId) {
+		room.disconnectPause = null;
+	}
 
-		// If the original host returned, transfer host back to them
-		if (
-			playerId === room.originalHostId &&
-			room.hostId !== playerId &&
-			!room.kickedPlayerIds.includes(playerId)
-		) {
-			room.hostId = playerId;
+	if (playerId === room.originalHostId && room.hostId !== playerId && !room.kickedPlayerIds.includes(playerId)) {
+		room.hostId = playerId;
+	}
+}
+
+function ensureForcedEliminationResult(room: Room, eliminatedPlayerId: string): void {
+	if (room.game.phase !== "game-over") {
+		return;
+	}
+
+	const lastResult = room.game.roundResults[room.game.roundResults.length - 1];
+	if (lastResult?.round === room.game.currentRound) {
+		return;
+	}
+
+	const votes: Record<string, string> = {};
+	for (const player of room.game.players) {
+		if (player.votedFor) {
+			votes[player.id] = player.votedFor;
 		}
 	}
+
+	const eliminatedPlayer = room.game.players.find((player) => player.id === eliminatedPlayerId);
+	room.game.roundResults = [
+		...room.game.roundResults,
+		{
+			round: room.game.currentRound,
+			votes,
+			eliminatedPlayer: eliminatedPlayerId,
+			wasTie: false,
+			impostorSurvived: eliminatedPlayer?.role !== "impostor",
+		},
+	];
+}
+
+export async function updateRoomHeartbeat(code: string, playerId: string): Promise<Room | null> {
+	const redis = await getRedisClient();
+	const key = getRoomKey(code);
+
+	for (let attempt = 0; attempt < ROOM_UPDATE_MAX_RETRIES; attempt++) {
+		await redis.watch(key);
+		const raw = await redis.get(key);
+		if (!raw) {
+			await redis.unwatch();
+			return null;
+		}
+
+		let room: Room;
+		try {
+			const parsed = JSON.parse(raw) as Partial<Room>;
+			if (!parsed || typeof parsed !== "object" || !parsed.game || !parsed.hostId || !parsed.code) {
+				const deleted = await redis.multi().del(key).exec();
+				if (deleted === null) {
+					continue;
+				}
+				return null;
+			}
+
+			room = {
+				...parsed,
+				code: normalizeCode(parsed.code),
+				originalHostId: parsed.originalHostId ?? parsed.hostId,
+				lastActivity: parsed.lastActivity ?? Date.now(),
+				impostorHelp: parsed.impostorHelp ?? false,
+				textChatEnabled: parsed.textChatEnabled ?? true,
+				playerHeartbeats: parsed.playerHeartbeats ?? {},
+				disconnectPause: parsed.disconnectPause ?? null,
+				originalPlayerIds: parsed.originalPlayerIds ?? [],
+				kickedPlayerIds: parsed.kickedPlayerIds ?? [],
+				leftPlayerNames: parsed.leftPlayerNames ?? [],
+				voluntaryLeftPlayerNames: parsed.voluntaryLeftPlayerNames ?? [],
+				waitingList: parsed.waitingList ?? [],
+				ended: parsed.ended ?? false,
+			} as Room;
+		} catch {
+			const deleted = await redis.multi().del(key).exec();
+			if (deleted === null) {
+				continue;
+			}
+			return null;
+		}
+
+		updateHeartbeat(room, playerId);
+		checkAndSetDisconnectPause(room);
+		room.lastActivity = Date.now();
+
+		const execResult = await redis.multi().set(key, JSON.stringify(room), { EX: ROOM_TTL_SECONDS }).exec();
+		if (execResult === null) {
+			continue;
+		}
+
+		return room;
+	}
+
+	throw new Error("Failed to update room heartbeat");
 }
 
 export function getDisconnectedPlayerIds(room: Room): string[] {
 	if (room.game.phase === "setup") return [];
 	const now = Date.now();
 	return room.game.players
-		.filter((p) => !p.isEliminated)
-		.filter((p) => {
-			const lastSeen = room.playerHeartbeats[p.id];
+		.filter((player) => !player.isEliminated)
+		.filter((player) => {
+			const lastSeen = room.playerHeartbeats[player.id];
 			return !lastSeen || now - lastSeen > DISCONNECT_THRESHOLD;
 		})
-		.map((p) => p.id);
+		.map((player) => player.id);
 }
 
 export function checkAndSetDisconnectPause(room: Room): void {
@@ -339,24 +563,19 @@ export function checkAndSetDisconnectPause(room: Room): void {
 
 	const disconnectedIds = getDisconnectedPlayerIds(room);
 
-	// If the currently paused player reconnected, clear pause
 	if (room.disconnectPause && !disconnectedIds.includes(room.disconnectPause.playerId)) {
 		room.disconnectPause = null;
 	}
 
-	// If the host is disconnected, transfer host to next connected player
 	if (disconnectedIds.includes(room.hostId)) {
-		const connectedPlayers = room.game.players.filter(
-			(p) => !p.isEliminated && !disconnectedIds.includes(p.id)
-		);
+		const connectedPlayers = room.game.players.filter((player) => !player.isEliminated && !disconnectedIds.includes(player.id));
 		if (connectedPlayers.length > 0) {
 			room.hostId = connectedPlayers[0].id;
 		}
 	}
 
-	// If no pause set yet and there's a new disconnect, set it
 	if (!room.disconnectPause && disconnectedIds.length > 0) {
-		const player = room.game.players.find((p) => p.id === disconnectedIds[0]);
+		const player = room.game.players.find((candidate) => candidate.id === disconnectedIds[0]);
 		if (player) {
 			room.disconnectPause = {
 				playerId: player.id,
@@ -367,258 +586,198 @@ export function checkAndSetDisconnectPause(room: Room): void {
 	}
 }
 
-export function setDisconnectWait(code: string, hostId: string, playerId: string): Room | null {
-	const room = getRoom(code);
+export async function setDisconnectWait(code: string, hostId: string, playerId: string): Promise<Room | null> {
+	const room = await loadRoom(code);
 	if (!room || room.hostId !== hostId) return null;
 	if (!room.disconnectPause || room.disconnectPause.playerId !== playerId) return null;
 
 	room.disconnectPause.hostDecision = "waiting";
-	room.lastActivity = Date.now();
-	return room;
+	return finalizeRoomUpdate(room);
 }
 
-export function dismissDisconnectedPlayer(code: string, hostId: string, targetPlayerId: string): Room | null {
-	const room = getRoom(code);
+export async function dismissDisconnectedPlayer(code: string, hostId: string, targetPlayerId: string): Promise<Room | null> {
+	const room = await loadRoom(code);
 	if (!room || room.hostId !== hostId) return null;
 
-	const targetPlayer = room.game.players.find((p) => p.id === targetPlayerId);
+	const targetPlayer = room.game.players.find((player) => player.id === targetPlayerId);
 	if (!targetPlayer) return null;
 
-	// During setup, just remove them
 	if (room.game.phase === "setup") {
-		room.game.players = room.game.players.filter((p) => p.id !== targetPlayerId);
+		room.game.players = room.game.players.filter((player) => player.id !== targetPlayerId);
 		delete room.playerHeartbeats[targetPlayerId];
-		room.kickedPlayerIds.push(targetPlayerId);
-		if (targetPlayer) room.leftPlayerNames.push(targetPlayer.name.toLowerCase());
-		if (room.disconnectPause?.playerId === targetPlayerId) room.disconnectPause = null;
-		room.lastActivity = Date.now();
-		return room;
+		addUnique(room.kickedPlayerIds, targetPlayerId);
+		addUnique(room.leftPlayerNames, getPlayerNameKey(targetPlayer.name));
+		if (room.disconnectPause?.playerId === targetPlayerId) {
+			room.disconnectPause = null;
+		}
+		return finalizeRoomUpdate(room);
 	}
 
-	// During game, eliminate the player and track as kicked
-	room.kickedPlayerIds.push(targetPlayerId);
-	if (targetPlayer) room.leftPlayerNames.push(targetPlayer.name.toLowerCase());
-	room.game.players = room.game.players.map((p) =>
-		p.id === targetPlayerId ? { ...p, isEliminated: true } : p
-	);
+	addUnique(room.kickedPlayerIds, targetPlayerId);
+	addUnique(room.leftPlayerNames, getPlayerNameKey(targetPlayer.name));
+	room.game.players = room.game.players.map((player) => (player.id === targetPlayerId ? { ...player, isEliminated: true } : player));
 
-	// Handle clue phase - if it was their turn, adjust
 	if (room.game.phase === "clues" && room.game.textChatEnabled) {
-		const activePlayers = room.game.players.filter((p) => !p.isEliminated);
+		const activePlayers = getActivePlayersForClues(room.game);
 		if (room.game.currentPlayerIndex >= activePlayers.length) {
 			room.game.phase = "voting";
 			room.game.currentPlayerIndex = 0;
 		}
 	}
 
-	// Handle voting phase - check if all remaining votes are in
 	if (room.game.phase === "voting") {
-		const activePlayers = room.game.players.filter((p) => !p.isEliminated);
-		if (activePlayers.every((p) => p.votedFor !== null)) {
+		const activePlayers = room.game.players.filter((player) => !player.isEliminated);
+		if (activePlayers.every((player) => player.votedFor !== null)) {
 			room.game = resolveRound(room.game);
 		}
 	}
 
-	// Check game end conditions
-	const remainingActive = room.game.players.filter((p) => !p.isEliminated);
-	const remainingImpostors = remainingActive.filter((p) => p.role === "impostor");
-	if (remainingImpostors.length === 0) {
-		room.game.phase = "game-over";
-		room.game.winner = "friends";
-		room.game.players = applyBonuses(room.game.players, "friends");
-	} else if (remainingActive.length <= 2) {
-		room.game.phase = "game-over";
-		room.game.winner = "impostor";
-		room.game.players = applyBonuses(room.game.players, "impostor");
-	}
+	evaluateGameOver(room);
+	ensureForcedEliminationResult(room, targetPlayerId);
 
-	// Clear disconnect pause
 	if (room.disconnectPause?.playerId === targetPlayerId) {
 		room.disconnectPause = null;
 	}
 
-	room.lastActivity = Date.now();
-	return room;
+	return finalizeRoomUpdate(room);
 }
 
-export function notifyPlayerLeft(code: string, playerId: string): void {
-	const room = rooms.get(code.toUpperCase());
+export async function notifyPlayerLeft(code: string, playerId: string): Promise<void> {
+	const room = await loadRoom(code);
 	if (!room) return;
 
-	// Mark the player's heartbeat as very old to trigger disconnect detection
 	if (room.playerHeartbeats[playerId]) {
 		room.playerHeartbeats[playerId] = 0;
+		await finalizeRoomUpdate(room);
 	}
 }
 
-// ─── Replay ─────────────────────────────────────────────────────────
-
-export function replayRoom(code: string, hostId: string): Room | null {
-	const room = getRoom(code);
+export async function replayRoom(code: string, hostId: string): Promise<Room | null> {
+	const room = await loadRoom(code);
 	if (!room || room.hostId !== hostId) return null;
 	if (room.game.phase !== "game-over") return null;
 
-	// Filter out kicked players before replay
-	room.game.players = room.game.players.filter(
-		(p) => !room.kickedPlayerIds.includes(p.id)
-	);
+	room.game.players = room.game.players.filter((player) => !room.kickedPlayerIds.includes(player.id));
+	room.game.players = room.game.players.filter((player) => !room.voluntaryLeftPlayerNames.includes(player.name.toLowerCase()));
 
-	// Filter out players who voluntarily left
-	room.game.players = room.game.players.filter(
-		(p) => !room.voluntaryLeftPlayerNames.includes(p.name.toLowerCase())
-	);
-
-	// Filter out disconnected players (no heartbeat)
 	const now = Date.now();
-	room.game.players = room.game.players.filter((p) => {
-		const lastSeen = room.playerHeartbeats[p.id];
-		return lastSeen && now - lastSeen < DISCONNECT_THRESHOLD * 3;
+	room.game.players = room.game.players.filter((player) => {
+		const lastSeen = room.playerHeartbeats[player.id];
+		return Boolean(lastSeen) && now - lastSeen < DISCONNECT_THRESHOLD * 3;
 	});
 
 	room.game = replayGame(room.game);
 	room.disconnectPause = null;
 
-	// Add waiting list players
-	for (const wp of room.waitingList) {
+	for (const waitingPlayer of room.waitingList) {
 		if (room.game.players.length >= MAX_PLAYERS) break;
-		if (room.game.players.some((p) => p.name.toLowerCase() === wp.name.toLowerCase())) continue;
-		const newPlayer = createPlayer(wp.name);
-		newPlayer.id = wp.id; // Keep waiting player's ID so their session works
+		if (room.game.players.some((player) => player.name.toLowerCase() === waitingPlayer.name.toLowerCase())) continue;
+		const newPlayer = createPlayer(waitingPlayer.name);
+		newPlayer.id = waitingPlayer.id;
 		room.game.players.push(newPlayer);
 		room.playerHeartbeats[newPlayer.id] = Date.now();
 	}
 	room.waitingList = [];
 
-	// Reset tracking for new game
 	room.kickedPlayerIds = [];
 	room.leftPlayerNames = [];
 	room.voluntaryLeftPlayerNames = [];
 	room.originalPlayerIds = [];
 
-	// Reset heartbeats for all remaining players
-	room.game.players.forEach((p) => {
-		room.playerHeartbeats[p.id] = now;
+	room.game.players.forEach((player) => {
+		room.playerHeartbeats[player.id] = now;
 	});
-	room.lastActivity = now;
-	return room;
+
+	return finalizeRoomUpdate(room);
 }
 
-// ─── Room Verification ──────────────────────────────────────────────
-
-export function isPlayerInRoom(code: string, playerId: string): boolean {
-	const room = rooms.get(code.toUpperCase());
+export async function isPlayerInRoom(code: string, playerId: string): Promise<boolean> {
+	const room = await loadRoom(code);
 	if (!room) return false;
-	return room.game.players.some((p) => p.id === playerId);
+	return getPresentPlayers(room).some((player) => player.id === playerId);
 }
 
-// ─── Voluntary Leave ────────────────────────────────────────────────
-
-export function leaveRoomVoluntarily(code: string, playerId: string): void {
-	const room = rooms.get(code.toUpperCase());
+export async function leaveRoomVoluntarily(code: string, playerId: string): Promise<void> {
+	const room = await loadRoom(code);
 	if (!room) return;
 
-	const player = room.game.players.find((p) => p.id === playerId);
+	const player = room.game.players.find((candidate) => candidate.id === playerId);
 	if (player) {
-		room.voluntaryLeftPlayerNames.push(player.name.toLowerCase());
+		addUnique(room.voluntaryLeftPlayerNames, getPlayerNameKey(player.name));
 	}
 
-	// If this player is the host, transfer host before they fully leave
 	if (room.hostId === playerId) {
-		const others = room.game.players.filter(
-			(p) => p.id !== playerId && !p.isEliminated
-		);
+		const others = room.game.players.filter((candidate) => candidate.id !== playerId && !candidate.isEliminated);
 		if (others.length > 0) {
 			room.hostId = others[0].id;
 		}
 	}
 
-	// During setup, remove them entirely
 	if (room.game.phase === "setup") {
-		room.game.players = room.game.players.filter((p) => p.id !== playerId);
+		room.game.players = room.game.players.filter((candidate) => candidate.id !== playerId);
 		delete room.playerHeartbeats[playerId];
+		await finalizeRoomUpdate(room);
 		return;
 	}
 
-	// During active game, eliminate and handle phase adjustments
 	if (room.game.phase !== "game-over") {
-		room.game.players = room.game.players.map((p) =>
-			p.id === playerId ? { ...p, isEliminated: true } : p
-		);
-		room.kickedPlayerIds.push(playerId);
+		room.game.players = room.game.players.map((candidate) => (candidate.id === playerId ? { ...candidate, isEliminated: true } : candidate));
 
-		// Handle clue phase - if it was their turn, adjust
 		if (room.game.phase === "clues" && room.game.textChatEnabled) {
-			const activePlayers = room.game.players.filter((p) => !p.isEliminated);
+			const activePlayers = getActivePlayersForClues(room.game);
 			if (room.game.currentPlayerIndex >= activePlayers.length) {
 				room.game.phase = "voting";
 				room.game.currentPlayerIndex = 0;
 			}
 		}
 
-		// Handle voting phase - check if all remaining votes are in
 		if (room.game.phase === "voting") {
-			const activePlayers = room.game.players.filter((p) => !p.isEliminated);
-			if (activePlayers.every((p) => p.votedFor !== null)) {
+			const activePlayers = room.game.players.filter((candidate) => !candidate.isEliminated);
+			if (activePlayers.every((candidate) => candidate.votedFor !== null)) {
 				room.game = resolveRound(room.game);
 			}
 		}
 
-		// Check game end conditions
-		const remainingActive = room.game.players.filter((p) => !p.isEliminated);
-		const remainingImpostors = remainingActive.filter((p) => p.role === "impostor");
-		if (remainingImpostors.length === 0) {
-			room.game.phase = "game-over";
-			room.game.winner = "friends";
-			room.game.players = applyBonuses(room.game.players, "friends");
-		} else if (remainingActive.length <= 2) {
-			room.game.phase = "game-over";
-			room.game.winner = "impostor";
-			room.game.players = applyBonuses(room.game.players, "impostor");
-		}
+		evaluateGameOver(room);
+		ensureForcedEliminationResult(room, playerId);
 	}
 
-	// Clear disconnect pause if it was for this player
 	if (room.disconnectPause?.playerId === playerId) {
 		room.disconnectPause = null;
 	}
 
-	// Mark heartbeat as old
 	if (room.playerHeartbeats[playerId]) {
 		room.playerHeartbeats[playerId] = 0;
 	}
+
+	await finalizeRoomUpdate(room);
 }
 
-// ─── Waiting List ───────────────────────────────────────────────────
-
-export function leaveWaitingList(code: string, waitingPlayerId: string): void {
-	const room = rooms.get(code.toUpperCase());
+export async function leaveWaitingList(code: string, waitingPlayerId: string): Promise<void> {
+	const room = await loadRoom(code);
 	if (!room) return;
-	room.waitingList = room.waitingList.filter((w) => w.id !== waitingPlayerId);
+
+	room.waitingList = room.waitingList.filter((waitingPlayer) => waitingPlayer.id !== waitingPlayerId);
+	await finalizeRoomUpdate(room);
 }
 
-export function isPlayerInWaitingList(code: string, waitingPlayerId: string): boolean {
-	const room = rooms.get(code.toUpperCase());
+export async function isPlayerInWaitingList(code: string, waitingPlayerId: string): Promise<boolean> {
+	const room = await loadRoom(code);
 	if (!room) return false;
-	return room.waitingList.some((w) => w.id === waitingPlayerId);
+	return room.waitingList.some((waitingPlayer) => waitingPlayer.id === waitingPlayerId);
 }
 
-export function getWaitingListPosition(code: string, waitingPlayerId: string): number {
-	const room = rooms.get(code.toUpperCase());
+export async function getWaitingListPosition(code: string, waitingPlayerId: string): Promise<number> {
+	const room = await loadRoom(code);
 	if (!room) return -1;
-	const index = room.waitingList.findIndex((w) => w.id === waitingPlayerId);
+	const index = room.waitingList.findIndex((waitingPlayer) => waitingPlayer.id === waitingPlayerId);
 	return index >= 0 ? index + 1 : -1;
 }
 
-// ─── End Game (force) ───────────────────────────────────────────────
-
-export function endGameForAll(code: string, hostId: string): Room | null {
-	const room = getRoom(code);
+export async function endGameForAll(code: string, hostId: string): Promise<Room | null> {
+	const room = await loadRoom(code);
 	if (!room || room.hostId !== hostId) return null;
+
 	room.ended = true;
-	room.lastActivity = Date.now();
-	// Delete room after a short delay to allow clients to see the ended state
-	setTimeout(() => {
-		rooms.delete(code.toUpperCase());
-	}, 10000);
-	return room;
+	return finalizeRoomUpdate(room, ENDED_ROOM_TTL_SECONDS);
 }

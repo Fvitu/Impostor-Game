@@ -1,0 +1,21 @@
+{
+  "gameOver": "Game Over",
+  "friendsWin": "Innocents Win!",
+  "impostorsWin": "Impostors Win!",
+  "friendsWinDesc": "All impostors were discovered and eliminated!",
+  "impostorsWinDesc": "At least one impostor survived undetected!",
+  "impostorsLabel": "Impostors: ",
+  "secretWordLabel": "Secret Word: ",
+  "finalScores": "Final Scores",
+  "impostor": "Impostor",
+  "friend": "Innocent",
+  "out": "Out",
+  "roundScore": "R{{round}}: +{{score}}",
+  "pts": "pts",
+  "roundHistory": "Round History",
+  "roundLabel": "Round {{number}}",
+  "tie": "Tie",
+  "impostorFound": "Impostor Found",
+  "impostorSurvived": "Impostor Survived",
+  "eliminated": "Eliminated: "
+}

@@ -1,0 +1,30 @@
+{
+  "back": "Back",
+  "round": "Round {{number}}",
+  "roundResult": "Round {{number}} Result",
+  "players": "Players",
+  "playerCount": "{{count}}/{{max}} players",
+  "playerCountMinimum": "(minimum 3)",
+  "needMorePlayers": "Need at least {{count}} more player(s)",
+  "startGame": "Start Game",
+  "nextRound": "Next Round",
+  "playAgain": "Play Again",
+  "playAgainSamePlayers": "Play Again (Same Players)",
+  "backToHome": "Back to Home",
+  "backToLobby": "Back to Lobby",
+  "viewFinalScores": "View Final Scores",
+  "gameOver": "Game Over!",
+  "friendsWin": "Innocents win!",
+  "impostorsWin": "Impostors win!",
+  "theImpostor": "The Impostor",
+  "friend": "Innocent",
+  "impostor": "Impostor",
+  "category": "Category",
+  "secretWord": "Secret Word",
+  "noGameData": "No game data found.",
+  "leaveRoom": "Leave Room",
+  "footer": {
+    "tagline": "The Impostor — A party game of deception and deduction",
+    "credit": "Created with ♡ by Fvitu"
+  }
+}

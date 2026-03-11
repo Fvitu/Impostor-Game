@@ -30,7 +30,7 @@ Players receive hidden roles (Friend or Impostor), share clues, vote, and try to
 - **UI**: React 19, Tailwind CSS v4, Radix UI primitives, Lucide icons
 - **State**:
   - Local mode: React context/reducer (`components/game/game-provider.tsx`)
-  - Online mode: server in-memory room store (`lib/room-store.ts`)
+  - Online mode: Redis-backed room store (`lib/room-store.ts`)
 
 ## Project Structure
 
@@ -49,7 +49,8 @@ components/
 
 lib/
   game-logic.ts                # Pure game engine and scoring
-  room-store.ts                # In-memory online room state
+  room-store.ts                # Redis-backed online room state
+  redis.ts                     # Shared Redis client singleton
   storage.ts                   # Browser localStorage persistence helpers
 ```
 
@@ -66,6 +67,59 @@ pnpm dev
 ```
 
 Open: `http://localhost:3000`
+
+## Redis Setup
+
+Online rooms now require Redis.
+
+### 1. Add the Redis connection string
+
+Create `.env.local` in the project root and add:
+
+```bash
+REDIS_URL=redis://default:your-password@localhost:6379
+```
+
+If your Redis provider requires TLS, use `rediss://` instead of `redis://`.
+
+You can start from the example file:
+
+```bash
+cp .env.example .env.local
+```
+
+Then replace the placeholder value with the real URL of your Redis server.
+
+### 2. How the environment variable works
+
+The project reads `REDIS_URL` from the environment when any `/api/rooms/*` route runs.
+That URL tells the app where the Redis server is and how to authenticate.
+
+Examples:
+
+```bash
+REDIS_URL=redis://localhost:6379
+REDIS_URL=redis://default:my-password@127.0.0.1:6379
+REDIS_URL=rediss://default:my-password@my-redis-host:6380
+```
+
+General format:
+
+```text
+redis://[username:password@]host:port
+rediss://[username:password@]host:port
+```
+
+### 3. Add the same variable in production
+
+When you deploy the app, add the same `REDIS_URL` value in your hosting provider's environment-variable settings.
+
+### 4. Install dependencies and start the app
+
+```bash
+pnpm install
+pnpm dev
+```
 
 ### Other scripts
 
@@ -150,11 +204,11 @@ Additional fields depend on action (`clue`, `targetId`, `targetPlayerId`, `waiti
 
 ## Important Architecture Notes
 
-- Online rooms are stored **in memory** (`Map` in `lib/room-store.ts`).
-- Room state is lost on server restart/redeploy.
-- Idle rooms are cleaned up automatically (~30 minutes inactivity).
-- This implementation is ideal for local/dev/small deployments.
-- For production-scale reliability, replace room store with Redis or a database.
+- Online rooms are stored in **Redis**.
+- Room records are refreshed on active requests and expire automatically after about **30 minutes** of inactivity.
+- Ended rooms stay available briefly so clients can receive the ended state, then Redis removes them automatically.
+- All `/api/rooms/*` routes run on the **Node.js runtime** so they can use the Redis client.
+- The app requires `REDIS_URL` to be configured before online rooms will work.
 
 ## Current Game Limits
 
@@ -164,7 +218,8 @@ Additional fields depend on action (`clue`, `targetId`, `targetPlayerId`, `waiti
 
 ## Future Improvements
 
-- Persistent online room backend (Redis/PostgreSQL)
+- Add optimistic locking or Lua scripts for stricter multi-request concurrency guarantees
+- Add a PostgreSQL-backed match history / analytics layer alongside Redis
 - Authentication / anti-impersonation for online lobbies
 - Automated tests for game logic and API routes
 - WebSocket or SSE for real-time room updates (instead of polling)

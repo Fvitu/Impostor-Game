@@ -1,0 +1,103 @@
+{
+  "lobby": {
+    "title": "Jugar Online",
+    "subtitle": "Crea o únete a una sala",
+    "onlineMultiplayer": "Multijugador Online",
+    "eachPlayerJoins": "Cada jugador se une desde su propio dispositivo",
+    "createRoom": "Crear una Sala",
+    "joinRoom": "Unirse a una Sala",
+    "back": "Volver",
+    "yourName": "Tu Nombre",
+    "enterName": "Ingresa tu nombre...",
+    "editName": "Editar nombre",
+    "confirmName": "Confirmar nombre",
+    "roomCode": "Código de Sala",
+    "roomCodePlaceholder": "ej. ABC12",
+    "pasteRoomCode": "Pegar código de sala del portapapeles",
+    "creating": "Creando...",
+    "createRoomBtn": "Crear Sala",
+    "joining": "Uniéndose...",
+    "joinRoomBtn": "Unirse a la Sala",
+    "failedCreate": "Error al crear la sala",
+    "failedJoin": "Error al unirse a la sala",
+    "noValidCode": "No se encontró un código válido en el portapapeles",
+    "clipboardError": "No se pudo leer del portapapeles",
+    "roomNoLongerAvailable": "La sala ya no está disponible",
+    "waitingRoom": "Sala de Espera",
+    "gameInProgress": "Hay un juego en progreso en la sala",
+    "waitingPosition": "Estás en la posición #{{position}} de la lista de espera. Te unirás automáticamente cuando termine la partida actual.",
+    "waitingForFinish": "Esperando a que termine el juego...",
+    "leaveWaitingRoom": "Salir de la Sala de Espera"
+  },
+  "game": {
+    "waitingRoom": "Sala de Espera",
+    "playersJoined": "{{count}} jugadores unidos",
+    "roomCode": "Código de Sala",
+    "copyCode": "Copiar código",
+    "shareCode": "Comparte este código con tus amigos",
+    "players": "Jugadores",
+    "you": "tú",
+    "removePlayer": "Eliminar a {{name}}",
+    "impostorHint": "Pista del Impostor",
+    "showCategory": "Mostrar pista guardada al Impostor",
+    "textChat": "Chat de Texto Durante la Partida",
+    "textChatDesc": "Si se desactiva, el anfitrión inicia la votación manualmente.",
+    "wordCategory": "Categoría de Palabras",
+    "wordCategoryDesc": "El anfitrión elige la categoría antes de iniciar",
+    "allCategories": "Todas las categorías (Aleatorio)",
+    "numberOfImpostors": "Número de Impostores",
+    "maxImpostorsFor": "Máx {{max}} para {{count}} jugadores",
+    "waitingForHost": "Esperando a que el anfitrión inicie el juego...",
+    "actionFailed": "Acción fallida",
+    "connectingToRoom": "Conectando a la sala...",
+    "checkingSession": "Verificando sesión activa...",
+    "loadingGameState": "Cargando estado del juego..."
+  },
+  "gameEnded": {
+    "title": "Juego Terminado",
+    "description": "El anfitrión ha terminado el juego para todos."
+  },
+  "disconnect": {
+    "waitingReconnection": "Esperando Reconexión",
+    "waitingFor": "Esperando a que {{name}} se reconecte...",
+    "removeInstead": "Eliminar en su Lugar",
+    "playerDisconnected": "Jugador Desconectado",
+    "hostDecision": "{{name}} ha abandonado el juego. ¿Qué te gustaría hacer?",
+    "removeAndContinue": "Eliminar y Continuar",
+    "waitForReturn": "Esperar su Regreso",
+    "nonHostWaiting": "{{name}} se ha desconectado. Esperando la decisión del anfitrión..."
+  },
+  "leave": {
+    "title": "¿Salir del Juego?",
+    "description": "¿Estás seguro de que quieres salir? Serás desconectado de la sala.",
+    "leaveGame": "Salir del Juego",
+    "endForEveryone": "Terminar Juego para Todos",
+    "stayInGame": "Permanecer en el Juego"
+  },
+  "clues": {
+    "rolesActive": "Roles Activos",
+    "waitingForVoting": "Ronda {{round}} - Esperando votación",
+    "startingPlayerLabel": "Jugador Inicial",
+    "startingPlayer": "{{name}} debe comenzar esta ronda.",
+    "textChatDisabled": "El chat está desactivado para esta partida.",
+    "hostWillDecide": "El anfitrión decidirá cuándo comienza la votación.",
+    "startVoting": "Iniciar Votación",
+    "waitingHostVoting": "Esperando a que el anfitrión inicie la votación...",
+    "yourRole": "Tu Rol",
+    "tapToHide": "Toca para ocultar",
+    "tapToReveal": "Toca para revelar",
+    "noHint": "No hay pista habilitada para esta partida.",
+    "hidden": "Oculto",
+    "cluesGiven": "Pistas Dadas",
+    "itsYourTurn": "¡Es Tu Turno!",
+    "singleWordClue": "Da una pista de una palabra",
+    "waitingForClue": "Esperando a que {{name}} dé una pista..."
+  },
+  "voting": {
+    "playersLeftToVote": "{{count}} jugador(es) por votar"
+  },
+  "resolution": {
+    "waitingNewGame": "Esperando a que el anfitrión inicie un nuevo juego...",
+    "waitingNextRound": "Esperando a que el anfitrión inicie la siguiente ronda..."
+  }
+}

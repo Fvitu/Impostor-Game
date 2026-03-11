@@ -14,6 +14,7 @@ import {
 	resolveRound,
 	replayGame,
 } from "@/lib/game-logic";
+import { DEFAULT_CATEGORY_SELECTION, type GameCategorySelection } from "@/lib/game-data";
 import { saveLocalGameState, clearLocalGameState, saveLocalPlayers } from "@/lib/storage";
 
 type GameAction =
@@ -23,8 +24,9 @@ type GameAction =
 	| { type: "SET_IMPOSTOR_HELP"; help: boolean }
 	| { type: "SET_TEXT_CHAT_ENABLED"; enabled: boolean }
 	| { type: "SET_INDIVIDUAL_VOTING_ENABLED"; enabled: boolean }
+	| { type: "SET_CATEGORY_SELECTION"; category: GameCategorySelection }
 	| { type: "SET_IMPOSTOR_COUNT"; count: number }
-	| { type: "START_GAME" }
+	| { type: "START_GAME"; language?: string; categorySelection?: GameCategorySelection }
 	| { type: "START_CLUES" }
 	| { type: "START_VOTING" }
 	| { type: "SUBMIT_CLUE"; playerId: string; clue: string }
@@ -49,10 +51,15 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 			return { ...state, textChatEnabled: action.enabled };
 		case "SET_INDIVIDUAL_VOTING_ENABLED":
 			return { ...state, individualVotingEnabled: action.enabled };
+		case "SET_CATEGORY_SELECTION":
+			return { ...state, selectedCategory: action.category };
 		case "SET_IMPOSTOR_COUNT":
 			return { ...state, impostorCount: action.count };
 		case "START_GAME":
-			return assignRoles(state);
+			return assignRoles(state, {
+				language: action.language,
+				categorySelection: action.categorySelection ?? state.selectedCategory ?? DEFAULT_CATEGORY_SELECTION,
+			});
 		case "START_CLUES":
 			return startCluePhase(state);
 		case "START_VOTING":

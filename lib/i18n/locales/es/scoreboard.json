@@ -1,0 +1,21 @@
+{
+  "gameOver": "Fin del Juego",
+  "friendsWin": "¡Los Inocentes Ganan!",
+  "impostorsWin": "¡Los Impostores Ganan!",
+  "friendsWinDesc": "¡Todos los impostores fueron descubiertos y eliminados!",
+  "impostorsWinDesc": "¡Al menos un impostor sobrevivió sin ser detectado!",
+  "impostorsLabel": "Impostores: ",
+  "secretWordLabel": "Palabra Secreta: ",
+  "finalScores": "Puntuaciones Finales",
+  "impostor": "Impostor",
+  "friend": "Inocente",
+  "out": "Fuera",
+  "roundScore": "R{{round}}: +{{score}}",
+  "pts": "pts",
+  "roundHistory": "Historial de Rondas",
+  "roundLabel": "Ronda {{number}}",
+  "tie": "Empate",
+  "impostorFound": "Impostor Encontrado",
+  "impostorSurvived": "Impostor Sobrevivió",
+  "eliminated": "Eliminado: "
+}

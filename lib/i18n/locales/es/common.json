@@ -1,0 +1,30 @@
+{
+  "back": "Volver",
+  "round": "Ronda {{number}}",
+  "roundResult": "Resultado Ronda {{number}}",
+  "players": "Jugadores",
+  "playerCount": "{{count}}/{{max}} jugadores",
+  "playerCountMinimum": "(mínimo 3)",
+  "needMorePlayers": "Necesitas al menos {{count}} jugador(es) más",
+  "startGame": "Iniciar Juego",
+  "nextRound": "Siguiente Ronda",
+  "playAgain": "Jugar de Nuevo",
+  "playAgainSamePlayers": "Jugar de Nuevo (Mismos Jugadores)",
+  "backToHome": "Volver al Inicio",
+  "backToLobby": "Volver al Lobby",
+  "viewFinalScores": "Ver Puntuaciones Finales",
+  "gameOver": "¡Fin del Juego!",
+  "friendsWin": "¡Los Inocentes ganan!",
+  "impostorsWin": "¡Los Impostores ganan!",
+  "theImpostor": "El Impostor",
+  "friend": "Inocente",
+  "impostor": "Impostor",
+  "category": "Categoría",
+  "secretWord": "Palabra Secreta",
+  "noGameData": "No se encontraron datos del juego.",
+  "leaveRoom": "Salir de la Sala",
+  "footer": {
+    "tagline": "El Impostor — Un juego de engaño y deducción",
+    "credit": "Creado con ♡ por Fvitu"
+  }
+}

@@ -1,4 +1,6 @@
 // Complete game logic engine for The Impostor
+import type { SupportedLanguage } from "@/lib/i18n";
+import { DEFAULT_CATEGORY_SELECTION, isCategorySelection, pickRandomWord, type GameCategorySelection } from "@/lib/game-data";
 
 export interface Player {
   id: string
@@ -16,9 +18,12 @@ export interface GameState {
 	mode: "pass-and-play" | "online";
 	phase: "setup" | "roles" | "clues" | "voting" | "resolution" | "game-over";
 	players: Player[];
+	roundPlayerOrder: string[];
 	currentRound: number;
 	secretWord: string;
+	hint: string;
 	category: string;
+	selectedCategory: GameCategorySelection;
 	impostorHelp: boolean;
 	textChatEnabled: boolean;
 	individualVotingEnabled: boolean;
@@ -38,17 +43,6 @@ export interface RoundResult {
 
 export const MAX_PLAYERS = 16;
 export const MAX_IMPOSTORS = 4;
-
-export const WORD_BANK: Record<string, string[]> = {
-  Animals: ["Dog", "Cat", "Elephant", "Penguin", "Dolphin", "Eagle", "Tiger", "Giraffe", "Octopus", "Bear"],
-  Food: ["Pizza", "Sushi", "Taco", "Burger", "Pasta", "Ice Cream", "Chocolate", "Salad", "Ramen", "Steak"],
-  Countries: ["Japan", "Brazil", "France", "Australia", "Egypt", "Canada", "Mexico", "India", "Italy", "Spain"],
-  Sports: ["Soccer", "Basketball", "Tennis", "Swimming", "Boxing", "Cricket", "Volleyball", "Golf", "Hockey", "Baseball"],
-  Movies: ["Titanic", "Avatar", "Inception", "Frozen", "Gladiator", "Jaws", "Rocky", "Matrix", "Shrek", "Coco"],
-  Professions: ["Doctor", "Firefighter", "Teacher", "Chef", "Pilot", "Astronaut", "Detective", "Artist", "Engineer", "Scientist"],
-  Objects: ["Umbrella", "Guitar", "Telescope", "Candle", "Compass", "Mirror", "Clock", "Backpack", "Keyboard", "Scissors"],
-  Places: ["Beach", "Hospital", "Library", "Airport", "Stadium", "Museum", "Park", "Castle", "Market", "School"],
-}
 
 function generateId(): string {
   return Math.random().toString(36).substring(2, 9)
@@ -73,9 +67,12 @@ export function createGame(mode: "pass-and-play" | "online"): GameState {
 		mode,
 		phase: "setup",
 		players: [],
+		roundPlayerOrder: [],
 		currentRound: 1,
 		secretWord: "",
+		hint: "",
 		category: "",
+		selectedCategory: DEFAULT_CATEGORY_SELECTION,
 		impostorHelp: false,
 		textChatEnabled: true,
 		individualVotingEnabled: true,
@@ -98,42 +95,89 @@ export function removePlayer(game: GameState, playerId: string): GameState {
   return { ...game, players: game.players.filter((p) => p.id !== playerId) }
 }
 
-export function assignRoles(game: GameState): GameState {
-  const categories = Object.keys(WORD_BANK)
-  const category = categories[Math.floor(Math.random() * categories.length)]
-  const words = WORD_BANK[category]
-  const secretWord = words[Math.floor(Math.random() * words.length)]
+interface AssignRolesOptions {
+	language?: SupportedLanguage | string;
+	categorySelection?: GameCategorySelection;
+}
 
-  const activePlayers = game.players.filter((p) => !p.isEliminated)
+function createRoundPlayerOrder(players: Player[]): string[] {
+	return shuffle(players.map((player) => player.id));
+}
+
+function getRoundOrderedActivePlayers(game: GameState): Player[] {
+	const activePlayers = game.players.filter((player) => !player.isEliminated);
+	if (activePlayers.length <= 1) {
+		return activePlayers;
+	}
+
+	const activePlayersById = new Map(activePlayers.map((player) => [player.id, player]));
+	const orderedPlayers: Player[] = [];
+	const seenPlayerIds = new Set<string>();
+
+	for (const playerId of game.roundPlayerOrder ?? []) {
+		const player = activePlayersById.get(playerId);
+		if (!player) {
+			continue;
+		}
+
+		orderedPlayers.push(player);
+		seenPlayerIds.add(playerId);
+	}
+
+	for (const player of activePlayers) {
+		if (seenPlayerIds.has(player.id)) {
+			continue;
+		}
+
+		orderedPlayers.push(player);
+	}
+
+	return orderedPlayers;
+}
+
+export function assignRoles(game: GameState, options: AssignRolesOptions = {}): GameState {
+	const language = options.language ?? "en";
+	const rawSelection = options.categorySelection ?? game.selectedCategory ?? DEFAULT_CATEGORY_SELECTION;
+	const categorySelection = isCategorySelection(rawSelection) ? rawSelection : DEFAULT_CATEGORY_SELECTION;
+	const selection = pickRandomWord(language, categorySelection);
+
+	const activePlayers = game.players.filter((p) => !p.isEliminated);
 	const maxAllowed = getMaxImpostorCount(activePlayers.length);
 	const impostorCount = Math.min(game.impostorCount || 1, maxAllowed);
 	const shuffledPlayerIds = shuffle(activePlayers.map((p) => p.id));
 	const impostorIds = new Set(shuffledPlayerIds.slice(0, impostorCount));
 
-  const updatedPlayers = game.players.map((player) => {
-    if (player.isEliminated) return player;
-    return {
-		...player,
-		role: impostorIds.has(player.id) ? ("impostor" as const) : ("friend" as const),
-		votedFor: null,
-		clues: [...player.clues],
-	};
-  })
+	const updatedPlayers = game.players.map((player) => {
+		if (player.isEliminated) return player;
+		return {
+			...player,
+			role: impostorIds.has(player.id) ? ("impostor" as const) : ("friend" as const),
+			votedFor: null,
+			clues: [...player.clues],
+		};
+	});
 
-  return {
-    ...game,
-    phase: "roles",
-    players: updatedPlayers,
-    secretWord,
-    category,
-    currentPlayerIndex: 0,
-  }
+	return {
+		...game,
+		phase: "roles",
+		players: updatedPlayers,
+		roundPlayerOrder: createRoundPlayerOrder(activePlayers),
+		secretWord: selection.word,
+		hint: selection.hint,
+		category: selection.categoryLabel,
+		selectedCategory: categorySelection,
+		currentPlayerIndex: 0,
+	};
 }
 
 export function startCluePhase(game: GameState): GameState {
+	const activePlayers = game.players.filter((player) => !player.isEliminated);
+	const roundPlayerOrder = game.roundPlayerOrder.length === activePlayers.length ? game.roundPlayerOrder : createRoundPlayerOrder(activePlayers);
+
   return {
 		...game,
 		phase: game.textChatEnabled ? "clues" : "voting",
+		roundPlayerOrder,
 		currentPlayerIndex: 0,
   };
 }
@@ -143,7 +187,7 @@ export function submitClue(game: GameState, playerId: string, clue: string): Gam
 		return game;
   }
 
-  const activePlayers = game.players.filter((p) => !p.isEliminated)
+	const activePlayers = getRoundOrderedActivePlayers(game);
   const currentActiveIndex = activePlayers.findIndex((p) => p.id === playerId)
 
   const updatedPlayers = game.players.map((p) => {
@@ -315,9 +359,12 @@ export function startNextRound(game: GameState): GameState {
 		return game;
 	}
 
+	const activePlayers = game.players.filter((player) => !player.isEliminated);
+
 	return {
 		...game,
 		phase: game.textChatEnabled ? "clues" : "voting",
+		roundPlayerOrder: createRoundPlayerOrder(activePlayers),
 		currentPlayerIndex: 0,
 	};
 }
@@ -349,16 +396,20 @@ export function applyBonuses(players: Player[], winner: "friends" | "impostor"):
 }
 
 export function getActivePlayersForClues(game: GameState): Player[] {
-  return game.players.filter((p) => !p.isEliminated)
+	return getRoundOrderedActivePlayers(game);
 }
 
 export function getActivePlayersForVoting(game: GameState): Player[] {
-  return game.players.filter((p) => !p.isEliminated)
+	return getRoundOrderedActivePlayers(game);
 }
 
 export function getCurrentCluePlayer(game: GameState): Player | null {
   const active = getActivePlayersForClues(game)
   return active[game.currentPlayerIndex] ?? null
+}
+
+export function getRoundStarter(game: GameState): Player | null {
+	return getRoundOrderedActivePlayers(game)[0] ?? null;
 }
 
 export function generateRoomCode(): string {
@@ -394,6 +445,8 @@ export function replayGame(game: GameState): GameState {
 		...createGame(game.mode),
 		id: game.id,
 		players: resetPlayers,
+		hint: game.hint,
+		selectedCategory: game.selectedCategory ?? DEFAULT_CATEGORY_SELECTION,
 		impostorHelp: game.impostorHelp,
 		textChatEnabled: game.textChatEnabled,
 		individualVotingEnabled: game.individualVotingEnabled,

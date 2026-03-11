@@ -1,11 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react";
+import { useTranslation } from 'react-i18next';
 import { OnlineLobby } from "@/components/online/online-lobby"
 import { OnlineGameView } from "@/components/online/online-game-view"
 import { getSavedOnlineSession, saveOnlineSession, clearOnlineSession, getWaitingSession, clearWaitingSession } from "@/lib/storage";
 
 export default function OnlinePlayPage() {
+	const { t } = useTranslation('online');
 	const [session, setSession] = useState<{
 		code: string;
 		playerId: string;
@@ -78,7 +80,7 @@ export default function OnlinePlayPage() {
 			<div className="min-h-dvh bg-background flex items-center justify-center">
 				<div className="text-center animate-page-enter">
 					<div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-					<p className="text-sm text-muted-foreground">Checking for active session...</p>
+					<p className="text-sm text-muted-foreground">{t('game.checkingSession')}</p>
 				</div>
 			</div>
 		);

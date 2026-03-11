@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft } from "lucide-react"
+import { useTranslation } from 'react-i18next'
 
 interface GameNavbarProps {
   backHref?: string
@@ -13,19 +14,20 @@ interface GameNavbarProps {
 }
 
 export function GameNavbar({ backHref = "/", onBack, title, subtitle, round }: GameNavbarProps) {
+  const { t } = useTranslation('common')
   return (
     <header className="flex items-center gap-3 px-4 py-4 border-b border-border">
       <div className="flex items-center gap-3">
         {onBack ? (
           <Button variant="ghost" size="icon" onClick={onBack} aria-label="Back">
             <ArrowLeft className="h-5 w-5" />
-            <span className="sr-only">Back</span>
+            <span className="sr-only">{t('back')}</span>
           </Button>
         ) : (
           <Link href={backHref} aria-label="Back">
             <Button variant="ghost" size="icon">
               <ArrowLeft className="h-5 w-5" />
-              <span className="sr-only">Back</span>
+              <span className="sr-only">{t('back')}</span>
             </Button>
           </Link>
         )}
@@ -41,8 +43,7 @@ export function GameNavbar({ backHref = "/", onBack, title, subtitle, round }: G
       {typeof round === "number" && (
         <div className="ml-auto">
           <p className="text-xs font-mono tracking-widest text-muted-foreground uppercase mb-0">
-            {"Round "}
-            {round}
+            {t('round', { number: round })}
           </p>
         </div>
       )}

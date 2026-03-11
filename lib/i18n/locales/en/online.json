@@ -1,0 +1,103 @@
+{
+  "lobby": {
+    "title": "Play Online",
+    "subtitle": "Create or join a room",
+    "onlineMultiplayer": "Online Multiplayer",
+    "eachPlayerJoins": "Each player joins from their own device",
+    "createRoom": "Create a Room",
+    "joinRoom": "Join a Room",
+    "back": "Back",
+    "yourName": "Your Name",
+    "enterName": "Enter your name...",
+    "editName": "Edit name",
+    "confirmName": "Confirm name",
+    "roomCode": "Room Code",
+    "roomCodePlaceholder": "e.g. ABC12",
+    "pasteRoomCode": "Paste room code from clipboard",
+    "creating": "Creating...",
+    "createRoomBtn": "Create Room",
+    "joining": "Joining...",
+    "joinRoomBtn": "Join Room",
+    "failedCreate": "Failed to create room",
+    "failedJoin": "Failed to join room",
+    "noValidCode": "No valid room code found in clipboard",
+    "clipboardError": "Unable to read from clipboard",
+    "roomNoLongerAvailable": "The room is no longer available",
+    "waitingRoom": "Waiting Room",
+    "gameInProgress": "A game is in progress in room",
+    "waitingPosition": "You're #{{position}} on the waiting list. You'll automatically join when the current game ends.",
+    "waitingForFinish": "Waiting for game to finish...",
+    "leaveWaitingRoom": "Leave Waiting Room"
+  },
+  "game": {
+    "waitingRoom": "Waiting Room",
+    "playersJoined": "{{count}} players joined",
+    "roomCode": "Room Code",
+    "copyCode": "Copy code",
+    "shareCode": "Share this code with your friends",
+    "players": "Players",
+    "you": "you",
+    "removePlayer": "Remove {{name}}",
+    "impostorHint": "Impostor Hint",
+    "showCategory": "Show saved hint to Impostor",
+    "textChat": "Text Chat During Match",
+    "textChatDesc": "If disabled, host starts voting manually.",
+    "wordCategory": "Word Category",
+    "wordCategoryDesc": "Host chooses the source category before starting",
+    "allCategories": "All Categories (Random)",
+    "numberOfImpostors": "Number of Impostors",
+    "maxImpostorsFor": "Max {{max}} for {{count}} players",
+    "waitingForHost": "Waiting for the host to start the game...",
+    "actionFailed": "Action failed",
+    "connectingToRoom": "Connecting to room...",
+    "checkingSession": "Checking for active session...",
+    "loadingGameState": "Loading game state..."
+  },
+  "gameEnded": {
+    "title": "Game Ended",
+    "description": "The host has ended the game for everyone."
+  },
+  "disconnect": {
+    "waitingReconnection": "Waiting for Reconnection",
+    "waitingFor": "Waiting for {{name}} to reconnect...",
+    "removeInstead": "Remove Instead",
+    "playerDisconnected": "Player Disconnected",
+    "hostDecision": "{{name}} has left the game. What would you like to do?",
+    "removeAndContinue": "Remove and Continue",
+    "waitForReturn": "Wait for Return",
+    "nonHostWaiting": "{{name}} has disconnected. Waiting for the host to decide..."
+  },
+  "leave": {
+    "title": "Leave Game?",
+    "description": "Are you sure you want to leave this game? You will be disconnected from the room.",
+    "leaveGame": "Leave Game",
+    "endForEveryone": "End Game for Everyone",
+    "stayInGame": "Stay in Game"
+  },
+  "clues": {
+    "rolesActive": "Roles Active",
+    "waitingForVoting": "Round {{round}} - Waiting for voting",
+    "startingPlayerLabel": "Round Starter",
+    "startingPlayer": "{{name}} should start this round.",
+    "textChatDisabled": "Text chat is disabled for this match.",
+    "hostWillDecide": "The host will decide when voting starts.",
+    "startVoting": "Start Voting",
+    "waitingHostVoting": "Waiting for host to start voting...",
+    "yourRole": "Your Role",
+    "tapToHide": "Tap to hide",
+    "tapToReveal": "Tap to reveal",
+    "noHint": "No hint enabled for this match.",
+    "hidden": "Hidden",
+    "cluesGiven": "Clues Given",
+    "itsYourTurn": "It's Your Turn!",
+    "singleWordClue": "Give a single-word clue",
+    "waitingForClue": "Waiting for {{name}} to give a clue..."
+  },
+  "voting": {
+    "playersLeftToVote": "{{count}} player(s) left to vote"
+  },
+  "resolution": {
+    "waitingNewGame": "Waiting for host to start a new game...",
+    "waitingNextRound": "Waiting for host to start next round..."
+  }
+}

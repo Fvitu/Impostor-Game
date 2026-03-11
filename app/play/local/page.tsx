@@ -1,10 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { GameProvider } from "@/components/game/game-provider"
 import { GameOrchestrator } from "@/components/game/game-orchestrator"
 import { getSavedLocalGameState, clearLocalGameState } from "@/lib/storage";
 import type { GameState } from "@/lib/game-logic";
+import { DEFAULT_CATEGORY_SELECTION, isCategorySelection } from "@/lib/game-data";
 import { Button } from "@/components/ui/button";
 import { RotateCcw, Play, ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -30,10 +32,21 @@ function validateResumedState(state: GameState): GameState {
 		state = { ...state, impostorCount: 1 };
 	}
 
+	// Ensure selectedCategory exists and is valid (for older saved states)
+	if (!state.selectedCategory || !isCategorySelection(state.selectedCategory)) {
+		state = { ...state, selectedCategory: DEFAULT_CATEGORY_SELECTION };
+	}
+
+	// Ensure hint exists (for older saved states)
+	if (typeof state.hint !== "string") {
+		state = { ...state, hint: "" };
+	}
+
 	return state;
 }
 
 export default function LocalPlayPage() {
+  const { t } = useTranslation(["setup", "common"]);
   const [initialState, setInitialState] = useState<GameState | undefined>(undefined);
   const [showResumePrompt, setShowResumePrompt] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -66,14 +79,14 @@ export default function LocalPlayPage() {
   if (showResumePrompt && initialState) {
 		return (
 			<div className="min-h-dvh flex flex-col">
-				<GameNavbar backHref="/" title="Pass & Play" subtitle="Game in progress found" />
+				<GameNavbar backHref="/" title={t("setup:passAndPlay")} subtitle={t("setup:gameInProgress")} />
 				<div className="flex-1 flex items-center justify-center px-4">
 					<div className="w-full max-w-sm mx-auto text-center animate-page-enter">
 						<RotateCcw className="h-12 w-12 text-primary mx-auto mb-6" />
-						<h2 className="text-2xl font-bold text-foreground mb-3">Resume Game?</h2>
-						<p className="text-sm text-muted-foreground mb-2">You have an in-progress game with {initialState.players.length} players.</p>
+						<h2 className="text-2xl font-bold text-foreground mb-3">{t("setup:resumeGame")}</h2>
+						<p className="text-sm text-muted-foreground mb-2">{t("setup:inProgressDesc", { count: initialState.players.length })}</p>
 						<p className="text-sm text-muted-foreground mb-8">
-							Round {initialState.currentRound} &mdash; {initialState.phase} phase
+							{t("setup:roundPhase", { round: initialState.currentRound, phase: initialState.phase })}
 						</p>
 						<div className="space-y-3">
 							<Button
@@ -84,7 +97,7 @@ export default function LocalPlayPage() {
 								size="lg"
 								className="w-full h-14 text-base bg-primary text-primary-foreground hover:bg-primary/90">
 								<Play className="h-5 w-5 mr-2" />
-								Resume Game
+								{t("setup:resumeButton")}
 							</Button>
 							<Button
 								onClick={() => {
@@ -97,7 +110,7 @@ export default function LocalPlayPage() {
 								size="lg"
 								className="w-full h-14 text-base border-border text-foreground hover:bg-secondary hover:text-secondary-foreground">
 								<RotateCcw className="h-5 w-5 mr-2" />
-								Start New Game
+								{t("setup:startNewGame")}
 							</Button>
 						</div>
 					</div>

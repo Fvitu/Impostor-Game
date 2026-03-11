@@ -1,0 +1,48 @@
+{
+  "hero": {
+    "subtitle": "El Juego de Mesa del Engaño",
+    "title": "El Impostor",
+    "description": "Una palabra. Un secreto. Un mentiroso. ¿Puedes encontrar al Impostor escondido entre tus amigos antes de que sea demasiado tarde?",
+    "playOnline": "Jugar Online",
+    "passAndPlay": "Pasar y Jugar",
+    "installApp": "Instalar App",
+    "installTitle": "Instalar El Impostor",
+    "installShare": "Compartir",
+    "installAddToHomeScreen": "\"Agregar a pantalla de inicio\"",
+    "installAdd": "\"Agregar\"",
+    "installStep1Before": "Toca el botón",
+    "installStep1Middle": "",
+    "installStep1After": "en la barra de herramientas de Safari",
+    "installStep2Before": "Desplázate hacia abajo y toca",
+    "installStep3Before": "Toca",
+    "installStep3After": "para confirmar",
+    "minPlayers": "Se requieren 3+ jugadores"
+  },
+  "rules": {
+    "sectionLabel": "Cómo Jugar",
+    "sectionTitle": "Reglas Simples, Engaño Sin Fin",
+    "step": "Paso {{number}}",
+    "gatherTitle": "Reúne a Tus Amigos",
+    "gatherDesc": "Necesitas al menos 3 jugadores. Uno será asignado en secreto como El Impostor.",
+    "learnTitle": "Aprende el Secreto",
+    "learnDesc": "Los Inocentes ven la palabra secreta. El Impostor no recibe nada (o solo la categoría como pista).",
+    "cluesTitle": "Da Pistas",
+    "cluesDesc": "Cada jugador da una pista de una palabra sobre el secreto. ¡Sé lo suficientemente sutil para no ayudar al Impostor!",
+    "debateTitle": "Debate y Deduce",
+    "debateDesc": "Discutan las pistas. ¿Quién pareció sospechoso? ¿Quién fue muy vago o muy específico?",
+    "voteTitle": "Vota para Eliminar",
+    "voteDesc": "Emite tu voto. El jugador con más votos es eliminado. Los empates significan que nadie se va.",
+    "winTitle": "Gana el Juego",
+    "winDesc": "Los Inocentes ganan eliminando al Impostor. El Impostor gana sobreviviendo las 3 rondas."
+  },
+  "scoring": {
+    "sectionLabel": "Sistema de Puntos",
+    "sectionTitle": "Cada Ronda Cuenta",
+    "friends": "Inocentes",
+    "theImpostor": "El Impostor",
+    "friendVotePoints": "puntos por votar al Impostor cada ronda",
+    "friendBonusPoints": "bonus si votaste correctamente cada ronda y el Impostor pierde",
+    "impostorSurvivePoints": "puntos por cada ronda sobrevivida",
+    "impostorBonusPoints": "bonus por sobrevivir las 3 rondas"
+  }
+}

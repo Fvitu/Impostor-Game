@@ -1,48 +1,51 @@
 "use client"
 
 import { Eye, EyeOff, Users, MessageSquare, Vote, Trophy, Shield, Search } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 
-const rules = [
+export function RulesSection() {
+  const { t } = useTranslation('landing')
+
+  const rules = [
 	{
 		icon: Users,
-		title: "Gather Your Friends",
-		description: "You need at least 3 players. One will be secretly assigned as The Impostor.",
+		title: t('rules.gatherTitle'),
+		description: t('rules.gatherDesc'),
 	},
 	{
 		icon: Eye,
-		title: "Learn the Secret",
-		description: "Friends see the secret word. The Impostor gets nothing (or just the category as a hint).",
+		title: t('rules.learnTitle'),
+		description: t('rules.learnDesc'),
 	},
 	{
 		icon: MessageSquare,
-		title: "Give Clues",
-		description: "Each player gives a one-word clue about the secret. Be subtle enough to not help the Impostor!",
+		title: t('rules.cluesTitle'),
+		description: t('rules.cluesDesc'),
 	},
 	{
 		icon: Search,
-		title: "Debate & Deduce",
-		description: "Discuss the clues. Who seemed suspicious? Who was too vague or too specific?",
+		title: t('rules.debateTitle'),
+		description: t('rules.debateDesc'),
 	},
 	{
 		icon: Vote,
-		title: "Vote to Eliminate",
-		description: "Cast your vote. The player with the most votes is eliminated. Ties mean no one leaves.",
+		title: t('rules.voteTitle'),
+		description: t('rules.voteDesc'),
 	},
 	{
 		icon: Trophy,
-		title: "Win the Game",
-		description: "Friends win by voting out the Impostor. The Impostor wins by surviving all 3 rounds.",
+		title: t('rules.winTitle'),
+		description: t('rules.winDesc'),
 	},
-];
+  ];
 
-export function RulesSection() {
   return (
 		<section className="py-20 px-4 animate-page-enter animate-page-enter-delay-1">
 			<div className="max-w-5xl mx-auto">
 				<div className="text-center mb-16">
-					<p className="text-sm font-mono tracking-widest text-primary uppercase mb-3">How to Play</p>
-					<h2 className="text-3xl md:text-4xl font-bold text-foreground text-balance">Simple Rules, Endless Deception</h2>
+					<p className="text-sm font-mono tracking-widest text-primary uppercase mb-3">{t('rules.sectionLabel')}</p>
+					<h2 className="text-3xl md:text-4xl font-bold text-foreground text-balance">{t('rules.sectionTitle')}</h2>
 				</div>
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 					{rules.map((rule, index) => (
@@ -56,8 +59,7 @@ export function RulesSection() {
 								</div>
 								<div>
 									<p className="text-xs font-mono text-muted-foreground mb-1">
-										{"Step "}
-										{index + 1}
+										{t('rules.step', { number: index + 1 })}
 									</p>
 									<h3 className="text-base font-semibold text-foreground mb-2">{rule.title}</h3>
 									<p className="text-sm text-muted-foreground leading-relaxed">{rule.description}</p>
@@ -72,12 +74,14 @@ export function RulesSection() {
 }
 
 export function ScoringSection() {
+  const { t } = useTranslation('landing')
+
   return (
 		<section className="py-20 px-4 bg-secondary/30 animate-page-enter animate-page-enter-delay-2">
 			<div className="max-w-4xl mx-auto">
 				<div className="text-center mb-12">
-					<p className="text-sm font-mono tracking-widest text-primary uppercase mb-3">Points System</p>
-					<h2 className="text-3xl md:text-4xl font-bold text-foreground text-balance">Every Round Counts</h2>
+					<p className="text-sm font-mono tracking-widest text-primary uppercase mb-3">{t('scoring.sectionLabel')}</p>
+					<h2 className="text-3xl md:text-4xl font-bold text-foreground text-balance">{t('scoring.sectionTitle')}</h2>
 				</div>
 				<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 					<div className="glow-box rounded-xl border-success/30 p-8 animate-page-enter">
@@ -85,17 +89,17 @@ export function ScoringSection() {
 							<div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/10">
 								<Shield className="h-5 w-5 text-success" />
 							</div>
-							<h3 className="text-xl font-bold text-foreground">Friends</h3>
+							<h3 className="text-xl font-bold text-foreground">{t('scoring.friends')}</h3>
 						</div>
 						<ul className="space-y-3">
 							<li className="flex items-start gap-3">
 								<span className="font-mono text-sm text-success font-bold mt-0.5">+2</span>
-								<span className="text-sm text-muted-foreground leading-relaxed">points for voting the Impostor each round</span>
+								<span className="text-sm text-muted-foreground leading-relaxed">{t('scoring.friendVotePoints')}</span>
 							</li>
 							<li className="flex items-start gap-3">
 								<span className="font-mono text-sm text-success font-bold mt-0.5">+10</span>
 								<span className="text-sm text-muted-foreground leading-relaxed">
-									bonus if you voted correctly every round and the Impostor loses
+									{t('scoring.friendBonusPoints')}
 								</span>
 							</li>
 						</ul>
@@ -106,16 +110,16 @@ export function ScoringSection() {
 							<div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
 								<EyeOff className="h-5 w-5 text-primary" />
 							</div>
-							<h3 className="text-xl font-bold text-foreground">The Impostor</h3>
+							<h3 className="text-xl font-bold text-foreground">{t('scoring.theImpostor')}</h3>
 						</div>
 						<ul className="space-y-3">
 							<li className="flex items-start gap-3">
 								<span className="font-mono text-sm text-primary font-bold mt-0.5">+2</span>
-								<span className="text-sm text-muted-foreground leading-relaxed">points for each round survived</span>
+								<span className="text-sm text-muted-foreground leading-relaxed">{t('scoring.impostorSurvivePoints')}</span>
 							</li>
 							<li className="flex items-start gap-3">
 								<span className="font-mono text-sm text-primary font-bold mt-0.5">+10</span>
-								<span className="text-sm text-muted-foreground leading-relaxed">bonus for surviving all 3 rounds</span>
+								<span className="text-sm text-muted-foreground leading-relaxed">{t('scoring.impostorBonusPoints')}</span>
 							</li>
 						</ul>
 					</div>

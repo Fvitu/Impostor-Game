@@ -1,0 +1,48 @@
+{
+  "hero": {
+    "subtitle": "The Party Game of Deception",
+    "title": "The Impostor",
+    "description": "One word. One secret. One liar. Can you find the Impostor hiding among your friends before it is too late?",
+    "playOnline": "Play Online",
+    "passAndPlay": "Pass & Play",
+    "installApp": "Install App",
+    "installTitle": "Install The Impostor",
+    "installShare": "Share",
+    "installAddToHomeScreen": "\"Add to Home Screen\"",
+    "installAdd": "\"Add\"",
+    "installStep1Before": "Tap the",
+    "installStep1Middle": "button",
+    "installStep1After": "in the Safari toolbar",
+    "installStep2Before": "Scroll down and tap",
+    "installStep3Before": "Tap",
+    "installStep3After": "to confirm",
+    "minPlayers": "3+ players required"
+  },
+  "rules": {
+    "sectionLabel": "How to Play",
+    "sectionTitle": "Simple Rules, Endless Deception",
+    "step": "Step {{number}}",
+    "gatherTitle": "Gather Your Friends",
+    "gatherDesc": "You need at least 3 players. One will be secretly assigned as The Impostor.",
+    "learnTitle": "Learn the Secret",
+    "learnDesc": "Innocents see the secret word. The Impostor gets nothing (or just the category as a hint).",
+    "cluesTitle": "Give Clues",
+    "cluesDesc": "Each player gives a one-word clue about the secret. Be subtle enough to not help the Impostor!",
+    "debateTitle": "Debate & Deduce",
+    "debateDesc": "Discuss the clues. Who seemed suspicious? Who was too vague or too specific?",
+    "voteTitle": "Vote to Eliminate",
+    "voteDesc": "Cast your vote. The player with the most votes is eliminated. Ties mean no one leaves.",
+    "winTitle": "Win the Game",
+    "winDesc": "Innocents win by voting out the Impostor. The Impostor wins by surviving all 3 rounds."
+  },
+  "scoring": {
+    "sectionLabel": "Points System",
+    "sectionTitle": "Every Round Counts",
+    "friends": "Innocents",
+    "theImpostor": "The Impostor",
+    "friendVotePoints": "points for voting the Impostor each round",
+    "friendBonusPoints": "bonus if you voted correctly every round and the Impostor loses",
+    "impostorSurvivePoints": "points for each round survived",
+    "impostorBonusPoints": "bonus for surviving all 3 rounds"
+  }
+}

@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
 import { joinRoom } from "@/lib/room-store"
 
+export const runtime = "nodejs";
+
 export async function POST(request: NextRequest) {
   try {
     const { code, playerName } = await request.json()
-    if (!code || !playerName) {
-      return NextResponse.json({ error: "Room code and player name are required" }, { status: 400 })
-    }
+		const normalizedCode = typeof code === "string" ? code.toUpperCase().trim() : "";
+		const normalizedPlayerName = typeof playerName === "string" ? playerName.trim() : "";
 
-    const result = joinRoom(code.toUpperCase().trim(), playerName.trim())
+		if (!normalizedCode || !normalizedPlayerName) {
+			return NextResponse.json({ error: "Room code and player name are required" }, { status: 400 });
+		}
+
+		const result = await joinRoom(normalizedCode, normalizedPlayerName);
     if (!result) {
       return NextResponse.json({ error: "Room not found or full" }, { status: 404 });
     }

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createRoom } from "@/lib/room-store"
 
+export const runtime = "nodejs";
+
 export async function POST(request: NextRequest) {
   try {
     const { hostName } = await request.json()
@@ -8,7 +10,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Host name is required" }, { status: 400 })
     }
 
-    const { room, playerId } = createRoom(hostName.trim())
+    const { room, playerId } = await createRoom(hostName.trim());
     return NextResponse.json({
       code: room.code,
       playerId,

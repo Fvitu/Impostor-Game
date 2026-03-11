@@ -1,6 +1,7 @@
 // Local storage utility for game persistence
 
 import type { GameState } from "@/lib/game-logic";
+import { migrateCategorySelection } from "@/lib/game-data";
 
 const STORAGE_KEYS = {
 	PLAYER_NAME: "impostor_player_name",
@@ -9,6 +10,7 @@ const STORAGE_KEYS = {
 	ONLINE_SESSION: "impostor_online_session",
 	RESULTS_GAME: "impostor_results_game",
 	WAITING_SESSION: "impostor_waiting_session",
+	LANGUAGE: "impostor_language",
 } as const;
 
 // ─── Player Name (online) ───────────────────────────────────────────
@@ -63,6 +65,7 @@ export function getSavedLocalGameState(): GameState | null {
 			clearLocalGameState();
 			return null;
 		}
+		wrapper.state.selectedCategory = migrateCategorySelection(wrapper.state.selectedCategory);
 		return wrapper.state;
 	} catch {
 		clearLocalGameState();

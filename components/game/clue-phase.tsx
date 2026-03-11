@@ -1,21 +1,24 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslation } from "react-i18next";
 import { useGame } from "./game-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { getCurrentCluePlayer, getActivePlayersForClues } from "@/lib/game-logic"
+import { getCurrentCluePlayer, getActivePlayersForClues, getRoundStarter } from "@/lib/game-logic";
 import { MessageSquare, Send, ChevronRight, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { GameNavbar } from "@/components/game/game-navbar";
 
 export function CluePhase() {
+  const { t } = useTranslation("game");
   const { game, dispatch } = useGame()
   const [clue, setClue] = useState("")
   const [showInput, setShowInput] = useState(false)
 
   const activePlayers = getActivePlayersForClues(game)
   const currentPlayer = getCurrentCluePlayer(game)
+	const roundStarter = getRoundStarter(game);
 
   if (!currentPlayer) return null
 
@@ -45,14 +48,19 @@ export function CluePhase() {
 
   return (
 		<div className="min-h-dvh flex flex-col">
-			<GameNavbar backHref="/" title={"Give Your Clue"} subtitle={"Round " + game.currentRound + " - Clue Phase"} round={game.currentRound} />
+			<GameNavbar backHref="/" title={t("clues.title")} subtitle={t("clues.subtitle", { round: game.currentRound })} round={game.currentRound} />
 
 			<div className="flex-1 flex items-center justify-center px-4">
 				<div className="max-w-lg w-full py-6 mx-auto flex flex-col animate-page-enter">
+					{roundStarter && (
+						<div className="mb-6 glow-box rounded-lg px-4 py-3 text-center animate-page-enter animate-page-enter-delay-1">
+							<p className="text-sm text-foreground">{t("voting.startingPlayer", { name: roundStarter.name })}</p>
+						</div>
+					)}
 					{/* Previous Clues */}
 					{previousClues.length > 0 && (
 						<div className="mb-6 animate-page-enter animate-page-enter-delay-1">
-							<p className="text-xs font-mono text-muted-foreground uppercase mb-3">Clues Given</p>
+							<p className="text-xs font-mono text-muted-foreground uppercase mb-3">{t("clues.cluesGiven")}</p>
 							<div className="space-y-2">
 								{previousClues.map((c) => (
 									<div key={c.name} className="glow-box flex items-center gap-3 rounded-lg px-4 py-3">
@@ -72,28 +80,26 @@ export function CluePhase() {
 					{/* Current Player */}
 					<div className="flex-1 flex flex-col items-center justify-center text-center animate-page-enter animate-page-enter-delay-2">
 						<div className="w-full max-w-sm">
-							<p className="text-sm text-muted-foreground mb-2">{"It's your turn"}</p>
+							<p className="text-sm text-muted-foreground mb-2">{t("clues.itsYourTurn")}</p>
 							<h2 className="text-2xl font-bold text-foreground mb-8">{currentPlayer.name}</h2>
 
 							{!showInput ? (
 								<div>
-									<p className="text-sm text-muted-foreground mb-6">
-										Pass the device to {currentPlayer.name}, then tap below to enter your clue.
-									</p>
+									<p className="text-sm text-muted-foreground mb-6">{t("clues.passDeviceTo", { name: currentPlayer.name })}</p>
 									<Button
 										onClick={() => setShowInput(true)}
 										size="lg"
 										className="w-full h-14 text-base bg-secondary text-secondary-foreground hover:bg-secondary/80">
 										<ChevronRight className="h-5 w-5 mr-2" />
-										{"I'm Ready"}
+										{t("clues.imReady")}
 									</Button>
 								</div>
 							) : (
 								<div className="animate-slide-up">
-									<p className="text-xs text-muted-foreground mb-4">Give a single-word clue about the secret word. Be subtle!</p>
+									<p className="text-xs text-muted-foreground mb-4">{t("clues.clueInstruction")}</p>
 									<div className="flex gap-2">
 										<Input
-											placeholder="Your clue..."
+											placeholder={t("clues.yourCluePlaceholder")}
 											value={clue}
 											onChange={(e) => setClue(e.target.value)}
 											onKeyDown={handleKeyDown}
@@ -107,7 +113,7 @@ export function CluePhase() {
 											size="lg"
 											className="h-12 px-4 bg-primary text-primary-foreground shrink-0">
 											<Send className="h-5 w-5" />
-											<span className="sr-only">Submit clue</span>
+											<span className="sr-only">{t("clues.submitClue")}</span>
 										</Button>
 									</div>
 								</div>
