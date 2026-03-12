@@ -1,7 +1,7 @@
 {
-  "name": "The Impostor - Party Game",
+  "name": "The Impostor - Deception game",
   "short_name": "The Impostor",
-  "description": "A thrilling multiplayer party game. Find the impostor among your friends or survive undetected.",
+  "description": "A thrilling multiplayer deception game. Find the impostor among your friends or survive undetected.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",

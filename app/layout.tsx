@@ -7,15 +7,16 @@ import { GlowTracker } from '@/components/ui/glow-tracker'
 import { SessionRedirect } from "@/components/session-redirect";
 import { I18nProvider } from "@/components/i18n-provider";
 import { LanguageSwitcher } from "@/components/language-switcher";
+import { AuthProvider } from "@/components/auth-provider";
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-	title: "The Impostor - Party Game",
+	title: "The Impostor - Deception game",
 	description:
-		"A thrilling multiplayer party game. Find the impostor among your friends or survive undetected. Play online or pass-and-play on a single device.",
+		"A thrilling multiplayer deception game. Find the impostor among your friends or survive undetected. Play online or pass-and-play on a single device.",
 	manifest: "/manifest.json",
 	icons: {
 		icon: "/Impostor-icon.png",
@@ -45,9 +46,11 @@ export default function RootLayout({
 		<html lang="en" className="dark">
 			<body className="font-sans antialiased min-h-dvh">
 				<I18nProvider>
-					<SessionRedirect />
-					{children}
-					<LanguageSwitcher />
+					<AuthProvider>
+						<SessionRedirect />
+						{children}
+						<LanguageSwitcher />
+					</AuthProvider>
 				</I18nProvider>
 				<PointerGridOverlay />
 				<GlowTracker />

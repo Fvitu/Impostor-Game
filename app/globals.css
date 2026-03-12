@@ -42,6 +42,11 @@
   --warning-foreground: oklch(0.12 0.01 260);
   --success: oklch(0.70 0.18 145);
   --success-foreground: oklch(0.12 0.01 260);
+  --scrollbar-size: 0.8rem;
+  --scrollbar-track: color-mix(in oklab, var(--card) 82%, transparent);
+  --scrollbar-thumb: color-mix(in oklab, var(--primary) 76%, black 8%);
+  --scrollbar-thumb-hover: color-mix(in oklab, var(--accent) 82%, var(--primary) 18%);
+  --scrollbar-thumb-border: color-mix(in oklab, var(--primary) 38%, white 12%);
 }
 
 .dark {
@@ -133,6 +138,53 @@
     @apply bg-background text-foreground;
   }
 
+  html {
+    scrollbar-gutter: stable;
+    overflow-x: hidden;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  html,
+  body,
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  *::-webkit-scrollbar {
+    width: var(--scrollbar-size);
+    height: var(--scrollbar-size);
+  }
+
+  *::-webkit-scrollbar-track {
+    border-radius: 9999px;
+    background: var(--scrollbar-track);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border: 2px solid var(--scrollbar-thumb-border);
+    border-radius: 9999px;
+    background: linear-gradient(180deg,
+        color-mix(in oklab, var(--primary) 72%, white 8%) 0%,
+        var(--scrollbar-thumb) 100%);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in oklab, var(--primary) 18%, transparent),
+      0 0 18px color-mix(in oklab, var(--primary) 20%, transparent);
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg,
+        color-mix(in oklab, var(--accent) 68%, white 10%) 0%,
+        var(--scrollbar-thumb-hover) 100%);
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
   /* Red-toned text selection matching the site accent */
   ::selection {
     /* Match input selection exactly: use primary color + readable foreground */
@@ -177,11 +229,11 @@
 
 @keyframes hero-glow-drift {
   0%, 100% {
-    transform: translate(-50%, -50%) scale(1);
+    transform: translateY(-50%) scale(1);
   }
 
   50% {
-    transform: translate(-47%, -52%) scale(1.3);
+    transform: translateY(-53%) scale(1.35);
   }
 }
 
@@ -206,7 +258,7 @@
 }
 
 .animate-hero-glow-drift {
-  animation: hero-glow-drift 8s ease-in-out infinite;
+  animation: hero-glow-drift 8s linear infinite;
 }
 
 .pointer-grid-overlay {
@@ -352,7 +404,8 @@ body>*:not(.pointer-grid-overlay) {
   .animate-slide-up,
   .animate-page-enter,
   .animate-page-enter-delay-1,
-  .animate-page-enter-delay-2 {
+  .animate-page-enter-delay-2,
+  .animate-hero-glow-drift {
     animation: none !important;
   }
 }

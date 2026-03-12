@@ -1,6 +1,6 @@
-import { createClient, type RedisClientType } from "redis";
+import { createClient } from "redis";
 
-type AppRedisClient = RedisClientType;
+type AppRedisClient = ReturnType<typeof createClient>;
 
 const REDIS_CONNECT_TIMEOUT_MS = 5_000;
 const REDIS_MAX_RECONNECT_RETRIES = 2;
@@ -16,9 +16,7 @@ type RedisGlobals = typeof globalThis & {
 function getRedisUrl(): string {
 	const redisUrl = process.env.REDIS_URL?.trim();
 	if (!redisUrl) {
-		throw new Error(
-			"REDIS_URL is not configured. Add REDIS_URL to your environment, for example: redis://default:password@localhost:6379",
-		);
+		throw new Error("REDIS_URL is not configured. Add REDIS_URL to your environment, for example: redis://default:password@localhost:6379");
 	}
 
 	return redisUrl;
@@ -107,43 +105,54 @@ function createAppRedisClient(globals: RedisGlobals): AppRedisClient {
 export async function getRedisClient(): Promise<AppRedisClient> {
 	const globals = globalThis as RedisGlobals;
 	const existingClient = globals.__impostorRedisClient__;
-
+	// If we already have a ready client, use it.
 	if (existingClient?.isReady) {
 		return existingClient;
 	}
 
-	if (!globals.__impostorRedisConnectPromise__) {
-		if (existingClient && !existingClient.isOpen) {
-			resetRedisClient(globals, existingClient);
-		}
+	// If a connect is already in progress, wait for it.
+	if (globals.__impostorRedisConnectPromise__) {
+		return globals.__impostorRedisConnectPromise__;
+	}
 
-		const client = globals.__impostorRedisClient__ ?? createAppRedisClient(globals);
-		globals.__impostorRedisClient__ = client;
-		const connectPromise = (client.isReady ? Promise.resolve(client) : client.connect().then(() => client))
-			.then((connectedClient) => {
-				if (!connectedClient.isReady) {
-					throw new Error("Redis client connected without becoming ready");
-				}
+	// If there is an existing client but it's not ready, reset it and create a fresh one.
+	if (existingClient && !existingClient.isReady) {
+		resetRedisClient(globals, existingClient);
+	}
 
-				return connectedClient;
-			})
-			.catch((error) => {
-				logRedisError(globals, error);
-				try {
-					client.destroy();
-				} catch {
-					// ignore cleanup failures
-				}
-				resetRedisClient(globals, client);
-				throw error;
-			});
+	// Create a new client and store the connect promise so concurrent callers reuse it.
+	const client = globals.__impostorRedisClient__ ?? createAppRedisClient(globals);
+	globals.__impostorRedisClient__ = client;
 
-		globals.__impostorRedisConnectPromise__ = connectPromise.finally(() => {
+	const connectPromise = (client.isReady ? Promise.resolve(client) : client.connect().then(() => client))
+		.then((connectedClient) => {
+			if (!connectedClient.isReady) {
+				throw new Error("Redis client connected without becoming ready");
+			}
+			return connectedClient;
+		})
+		.catch((error) => {
+			logRedisError(globals, error);
+			try {
+				// Attempt best-effort cleanup
+				// Some client implementations expose destroy/disconnect/quit
+				// Try them safely.
+				// @ts-ignore
+				client.disconnect && client.disconnect();
+			} catch {}
+			try {
+				// @ts-ignore
+				client.destroy && client.destroy();
+			} catch {}
+			resetRedisClient(globals, client);
+			throw error;
+		})
+		.finally(() => {
 			if (globals.__impostorRedisConnectPromise__ === connectPromise) {
 				globals.__impostorRedisConnectPromise__ = undefined;
 			}
 		});
-	}
 
-	return globals.__impostorRedisConnectPromise__;
+	globals.__impostorRedisConnectPromise__ = connectPromise;
+	return connectPromise;
 }

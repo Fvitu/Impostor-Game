@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node -e \"const fs=require('fs');fs.rmSync('.next',{recursive:true,force:true});\"",
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
@@ -41,6 +42,7 @@
     "@vercel/analytics": "^1.6.1",
     "@vercel/speed-insights": "^2.0.0",
     "autoprefixer": "^10.4.20",
+    "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.1.1",
@@ -48,6 +50,7 @@
     "embla-carousel-react": "8.6.0",
     "i18next": "^25.8.14",
     "input-otp": "1.4.2",
+    "jose": "^6.2.1",
     "lucide-react": "^0.564.0",
     "next": "16.1.6",
     "next-themes": "^0.4.6",
@@ -66,6 +69,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.0",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",

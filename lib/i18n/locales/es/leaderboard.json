@@ -1,0 +1,14 @@
+{
+	"title": "Clasificación",
+	"subtitle": "Mejores jugadores por puntuación",
+	"filterByCategory": "Filtrar por Categoría",
+	"allCategories": "Todas",
+	"noEntries": "Aún no hay jugadores en la clasificación",
+	"noEntriesHint": "¡Juega partidas online como usuario registrado para aparecer aquí!",
+	"player": "Jugador",
+	"points": "Puntos",
+	"winsImpostor": "Wins Imp.",
+	"winsInnocent": "Wins Ino.",
+	"games": "Partidas",
+	"refresh": "Actualizar"
+}

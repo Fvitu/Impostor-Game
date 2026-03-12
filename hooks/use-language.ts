@@ -14,9 +14,17 @@ export function useLanguage() {
     (lang: SupportedLanguage) => {
       i18n.changeLanguage(lang);
       try {
-        localStorage.setItem('impostor_language', lang);
-      } catch {
+			localStorage.setItem("impostor_language", lang);
+			// also set a cookie as a fallback for environments where localStorage
+			// is not writable (e.g. some private browsing modes on mobile)
+			try {
+				document.cookie = `impostor_language=${lang}; path=/; max-age=${60 * 60 * 24 * 365}`;
+			} catch {}
+		} catch {
         // localStorage may be unavailable
+        try {
+			document.cookie = `impostor_language=${lang}; path=/; max-age=${60 * 60 * 24 * 365}`;
+		} catch {}
       }
       document.documentElement.lang = lang;
     },

@@ -20,7 +20,9 @@ import type { SupportedLanguage } from "./i18n";
 import { getRedisClient } from "./redis";
 
 const DISCONNECT_THRESHOLD = 15_000;
-const ROOM_TTL_SECONDS = 10 * 60;
+// FIX: Room TTL increased to 30 minutes (configurable) so rooms survive
+// brief disconnections and players have a reasonable reconnection window.
+const ROOM_TTL_SECONDS = 30 * 60;
 const ENDED_ROOM_TTL_SECONDS = 10;
 const ROOM_KEY_PREFIX = "impostor:room:";
 const ROOM_UPDATE_MAX_RETRIES = 5;
@@ -126,15 +128,10 @@ function shouldDeleteRoom(room: Room): boolean {
 	return getPresentPlayers(room).length === 0 && room.waitingList.length === 0;
 }
 
-async function loadRoom(code: string): Promise<Room | undefined> {
-	const redis = await getRedisClient();
-	const raw = await redis.get(getRoomKey(code));
-	if (!raw) return undefined;
-
+function parseRoom(raw: string): Room | undefined {
 	try {
 		const parsed = JSON.parse(raw) as Partial<Room>;
 		if (!parsed || typeof parsed !== "object" || !parsed.game || !parsed.hostId || !parsed.code) {
-			await redis.del(getRoomKey(code));
 			return undefined;
 		}
 
@@ -155,9 +152,100 @@ async function loadRoom(code: string): Promise<Room | undefined> {
 			ended: parsed.ended ?? false,
 		} as Room;
 	} catch {
-		await redis.del(getRoomKey(code));
 		return undefined;
 	}
+}
+
+async function loadRoom(code: string): Promise<Room | undefined> {
+	const redis = await getRedisClient();
+	const raw = await redis.get(getRoomKey(code));
+	if (!raw) return undefined;
+
+	const room = parseRoom(raw);
+	if (!room) {
+		await redis.del(getRoomKey(code));
+	}
+	return room;
+}
+
+// FIX: Generic optimistic-locking update for room mutations that may race
+// (e.g. two players voting simultaneously). Uses WATCH/MULTI/EXEC with retries.
+async function updateRoomAtomically(code: string, mutate: (room: Room) => Room | null, ttlSeconds: number = ROOM_TTL_SECONDS): Promise<Room | null> {
+	const redis = await getRedisClient();
+	const key = getRoomKey(code);
+
+	for (let attempt = 0; attempt < ROOM_UPDATE_MAX_RETRIES; attempt++) {
+		await redis.watch(key);
+		const raw = await redis.get(key);
+		if (!raw) {
+			await redis.unwatch();
+			return null;
+		}
+
+		const room = parseRoom(raw);
+		if (!room) {
+			// Corrupted — try to clean up atomically
+			let deleted;
+			try {
+				deleted = await redis.multi().del(key).exec();
+			} catch (err: any) {
+				if (String(err).includes("One (or more) of the watched keys has been changed")) {
+					continue; // WATCH conflict, retry
+				}
+				throw err;
+			}
+			if (deleted === null) continue; // WATCH conflict, retry
+			return null;
+		}
+
+		const updated = mutate(room);
+		if (!updated) {
+			// mutate signals the operation is invalid
+			await redis.unwatch();
+			return null;
+		}
+
+		// Apply common post-mutation logic
+		promoteWaitingPlayersIntoSetup(updated);
+		ensureHost(updated);
+
+		if (shouldDeleteRoom(updated)) {
+			let deleted;
+			try {
+				deleted = await redis.multi().del(key).exec();
+			} catch (err: any) {
+				if (String(err).includes("One (or more) of the watched keys has been changed")) {
+					continue; // WATCH conflict, retry
+				}
+				throw err;
+			}
+			if (deleted === null) continue; // WATCH conflict, retry
+			return null;
+		}
+
+		updated.lastActivity = Date.now();
+		let execResult;
+		try {
+			execResult = await redis.multi().set(key, JSON.stringify(updated), { EX: ttlSeconds }).exec();
+		} catch (err: any) {
+			if (String(err).includes("One (or more) of the watched keys has been changed")) {
+				continue; // WATCH conflict, retry
+			}
+			throw err;
+		}
+		if (execResult === null) {
+			continue; // WATCH conflict, retry
+		}
+
+		return updated;
+	}
+
+	// All retries exhausted — fall back to non-atomic update
+	const room = await loadRoom(code);
+	if (!room) return null;
+	const updated = mutate(room);
+	if (!updated) return null;
+	return finalizeRoomUpdate(updated, ttlSeconds);
 }
 
 export async function saveRoom(room: Room, ttlSeconds: number = ROOM_TTL_SECONDS): Promise<Room> {
@@ -247,74 +335,110 @@ export async function getRoom(code: string): Promise<Room | undefined> {
 	return loadRoom(code);
 }
 
+// AUDIT: Refactored to use updateRoomAtomically to prevent race condition
+// where two players joining simultaneously could exceed MAX_PLAYERS via
+// non-atomic read-modify-write. Uses a closure variable to capture the
+// result type since the mutate callback can only return Room | null.
 export async function joinRoom(code: string, playerName: string): Promise<JoinRoomResult | null> {
-	const room = await loadRoom(code);
-	if (!room || room.ended) return null;
+	let joinResult: JoinRoomResult | null = null;
 
-	const nameLower = getPlayerNameKey(playerName);
-	const wasVoluntary = room.voluntaryLeftPlayerNames.includes(nameLower);
-	const kickedPlayer = room.game.players.find((player) => player.name.toLowerCase() === nameLower && room.kickedPlayerIds.includes(player.id));
-	if (kickedPlayer && !wasVoluntary) {
-		return { type: "blocked", reason: "You were removed from this room" };
-	}
-
-	if (room.game.phase === "setup") {
-		if (room.game.players.length >= MAX_PLAYERS) return null;
-		if (room.game.players.some((player) => player.name.toLowerCase() === nameLower)) return null;
-
-		const player = createPlayer(playerName);
-		room.game.players.push(player);
-		room.playerHeartbeats[player.id] = Date.now();
-		await finalizeRoomUpdate(room);
-		return { type: "joined", room, playerId: player.id };
-	}
-
-	const existingPlayer = room.game.players.find((player) => player.name.toLowerCase() === nameLower);
-	if (existingPlayer) {
-		const isOriginal = room.originalPlayerIds.includes(existingPlayer.id);
-
-		if ((isOriginal || wasVoluntary) && (wasVoluntary || !room.kickedPlayerIds.includes(existingPlayer.id))) {
-			room.playerHeartbeats[existingPlayer.id] = Date.now();
-
-			if (existingPlayer.id === room.originalHostId && room.hostId !== existingPlayer.id) {
-				room.hostId = existingPlayer.id;
-			}
-
-			if (room.disconnectPause?.playerId === existingPlayer.id) {
-				room.disconnectPause = null;
-			}
-
-			room.game.players = room.game.players.map((player) => (player.id === existingPlayer.id ? { ...player, isEliminated: false } : player));
-
-			if (wasVoluntary) {
-				room.voluntaryLeftPlayerNames = room.voluntaryLeftPlayerNames.filter((name) => name !== nameLower);
-				room.kickedPlayerIds = room.kickedPlayerIds.filter((id) => id !== existingPlayer.id);
-			}
-
-			await finalizeRoomUpdate(room);
-			return { type: "rejoined", room, playerId: existingPlayer.id };
+	const updatedRoom = await updateRoomAtomically(code, (room) => {
+		if (room.ended) {
+			joinResult = null;
+			return null;
 		}
-	}
 
-	const alreadyWaiting = room.waitingList.find((waitingPlayer) => waitingPlayer.name.toLowerCase() === nameLower);
-	if (alreadyWaiting) {
-		return { type: "blocked", reason: "You are already on the waiting list for this room" };
-	}
+		const nameLower = getPlayerNameKey(playerName);
+		const wasVoluntary = room.voluntaryLeftPlayerNames.includes(nameLower);
+		const kickedPlayer = room.game.players.find((player) => player.name.toLowerCase() === nameLower && room.kickedPlayerIds.includes(player.id));
+		if (kickedPlayer && !wasVoluntary) {
+			joinResult = { type: "blocked", reason: "You were removed from this room" };
+			return null;
+		}
 
-	if (room.waitingList.length + room.game.players.length >= MAX_PLAYERS) {
-		return null;
-	}
+		if (room.game.phase === "setup") {
+			if (room.game.players.length >= MAX_PLAYERS) {
+				joinResult = null;
+				return null;
+			}
+			if (room.game.players.some((player) => player.name.toLowerCase() === nameLower)) {
+				joinResult = null;
+				return null;
+			}
 
-	const waitingPlayer: WaitingPlayer = {
-		id: crypto.randomUUID(),
-		name: playerName,
-		joinedAt: Date.now(),
-	};
-	room.waitingList.push(waitingPlayer);
-	await finalizeRoomUpdate(room);
-	return { type: "waiting", room, waitingPlayerId: waitingPlayer.id, position: room.waitingList.length };
+			const player = createPlayer(playerName);
+			room.game.players.push(player);
+			room.playerHeartbeats[player.id] = Date.now();
+			joinResult = { type: "joined", room, playerId: player.id };
+			return room;
+		}
+
+		const existingPlayer = room.game.players.find((player) => player.name.toLowerCase() === nameLower);
+		if (existingPlayer) {
+			const isOriginal = room.originalPlayerIds.includes(existingPlayer.id);
+
+			if ((isOriginal || wasVoluntary) && (wasVoluntary || !room.kickedPlayerIds.includes(existingPlayer.id))) {
+				room.playerHeartbeats[existingPlayer.id] = Date.now();
+
+				if (existingPlayer.id === room.originalHostId && room.hostId !== existingPlayer.id) {
+					room.hostId = existingPlayer.id;
+				}
+
+				if (room.disconnectPause?.playerId === existingPlayer.id) {
+					room.disconnectPause = null;
+				}
+
+				// FIX: Only un-eliminate the player if they voluntarily left.
+				// Players who were properly voted out during gameplay should stay eliminated
+				// to preserve game integrity. Disconnect-reconnect players keep their state
+				// (role, score, clues) intact — only the heartbeat is refreshed.
+				if (wasVoluntary) {
+					room.game.players = room.game.players.map((player) => (player.id === existingPlayer.id ? { ...player, isEliminated: false } : player));
+				}
+
+				if (wasVoluntary) {
+					room.voluntaryLeftPlayerNames = room.voluntaryLeftPlayerNames.filter((name) => name !== nameLower);
+					room.kickedPlayerIds = room.kickedPlayerIds.filter((id) => id !== existingPlayer.id);
+				}
+
+				joinResult = { type: "rejoined", room, playerId: existingPlayer.id };
+				return room;
+			}
+		}
+
+		// Non-setup phase: game in progress.
+		// New players cannot join the active game but can join the waiting list.
+		const alreadyWaiting = room.waitingList.find((waitingPlayer) => waitingPlayer.name.toLowerCase() === nameLower);
+		if (alreadyWaiting) {
+			joinResult = { type: "blocked", reason: "You are already on the waiting list for this room" };
+			return null;
+		}
+
+		if (room.waitingList.length + room.game.players.length >= MAX_PLAYERS) {
+			joinResult = null;
+			return null;
+		}
+
+		const waitingPlayer: WaitingPlayer = {
+			id: crypto.randomUUID(),
+			name: playerName,
+			joinedAt: Date.now(),
+		};
+		room.waitingList.push(waitingPlayer);
+		joinResult = { type: "waiting", room, waitingPlayerId: waitingPlayer.id, position: room.waitingList.length };
+		return room;
+	});
+
+	// If updateRoomAtomically returned null and joinResult is still null,
+	// the room wasn't found (or ended/full)
+	if (!updatedRoom && !joinResult) return null;
+
+	return joinResult;
 }
 
+// AUDIT: Refactored to use updateRoomAtomically to prevent race condition
+// where concurrent startRoomGame calls could corrupt state via non-atomic
+// read-modify-write.
 export async function startRoomGame(
 	code: string,
 	hostId: string,
@@ -324,24 +448,31 @@ export async function startRoomGame(
 	categorySelection?: GameCategorySelection,
 	language: SupportedLanguage | string = "en",
 ): Promise<Room | null> {
-	const room = await loadRoom(code);
-	if (!room || room.hostId !== hostId) return null;
-	if (room.game.players.length < 3) return null;
+	return updateRoomAtomically(code, (room) => {
+		if (room.hostId !== hostId) return null;
+		if (room.game.players.length < 3) return null;
 
-	const requestedCategorySelection = categorySelection ?? room.game.selectedCategory;
-	const resolvedCategorySelection = migrateCategorySelection(requestedCategorySelection);
+		// AUDIT: Validate impostorCount bounds — clamp to [1, maxAllowed].
+		// Without Math.max(1, ...), a negative impostorCount would pass through
+		// Math.min and result in zero impostors being assigned.
+		const maxImpostors = getMaxImpostorCount(room.game.players.length);
+		const validImpostorCount = Math.max(1, Math.min(maxImpostors, Math.floor(impostorCount)));
 
-	room.impostorHelp = impostorHelp;
-	room.textChatEnabled = textChatEnabled;
-	room.game.impostorHelp = impostorHelp;
-	room.game.textChatEnabled = textChatEnabled;
-	room.game.impostorCount = impostorCount;
-	room.game.selectedCategory = resolvedCategorySelection;
-	room.originalPlayerIds = room.game.players.map((player) => player.id);
-	room.originalHostId = room.hostId;
-	room.game = assignRoles(room.game, { language, categorySelection: resolvedCategorySelection });
-	room.game.phase = "clues";
-	return finalizeRoomUpdate(room);
+		const requestedCategorySelection = categorySelection ?? room.game.selectedCategory;
+		const resolvedCategorySelection = migrateCategorySelection(requestedCategorySelection);
+
+		room.impostorHelp = impostorHelp;
+		room.textChatEnabled = textChatEnabled;
+		room.game.impostorHelp = impostorHelp;
+		room.game.textChatEnabled = textChatEnabled;
+		room.game.impostorCount = validImpostorCount;
+		room.game.selectedCategory = resolvedCategorySelection;
+		room.originalPlayerIds = room.game.players.map((player) => player.id);
+		room.originalHostId = room.hostId;
+		room.game = assignRoles(room.game, { language, categorySelection: resolvedCategorySelection });
+		room.game.phase = "clues";
+		return room;
+	});
 }
 
 export async function updateRoomSettings(
@@ -375,17 +506,20 @@ export async function updateRoomSettings(
 	return finalizeRoomUpdate(room);
 }
 
+// FIX: Use atomic update for clue submission to prevent potential race
+// with heartbeat updates modifying the same room concurrently.
 export async function submitRoomClue(code: string, playerId: string, clue: string): Promise<Room | null> {
-	const room = await loadRoom(code);
-	if (!room || room.game.phase !== "clues") return null;
-	if (!room.game.textChatEnabled) return null;
+	return updateRoomAtomically(code, (room) => {
+		if (room.game.phase !== "clues") return null;
+		if (!room.game.textChatEnabled) return null;
 
-	const activePlayers = getActivePlayersForClues(room.game);
-	const currentPlayer = activePlayers[room.game.currentPlayerIndex];
-	if (!currentPlayer || currentPlayer.id !== playerId) return null;
+		const activePlayers = getActivePlayersForClues(room.game);
+		const currentPlayer = activePlayers[room.game.currentPlayerIndex];
+		if (!currentPlayer || currentPlayer.id !== playerId) return null;
 
-	room.game = submitClue(room.game, playerId, clue);
-	return finalizeRoomUpdate(room);
+		room.game = submitClue(room.game, playerId, clue);
+		return room;
+	});
 }
 
 export async function startRoomVoting(code: string, hostId: string): Promise<Room | null> {
@@ -398,22 +532,25 @@ export async function startRoomVoting(code: string, hostId: string): Promise<Roo
 	return finalizeRoomUpdate(room);
 }
 
+// FIX: Use atomic update for voting to prevent race conditions when
+// two players submit votes simultaneously (concurrent read-modify-write).
 export async function submitRoomVote(code: string, voterId: string, targetId: string): Promise<Room | null> {
-	const room = await loadRoom(code);
-	if (!room || room.game.phase !== "voting") return null;
+	return updateRoomAtomically(code, (room) => {
+		if (room.game.phase !== "voting") return null;
 
-	const voter = room.game.players.find((player) => player.id === voterId);
-	const target = room.game.players.find((player) => player.id === targetId);
-	if (!voter || voter.isEliminated) return null;
-	if (!target || target.isEliminated) return null;
-	if (voterId === targetId) return null;
+		const voter = room.game.players.find((player) => player.id === voterId);
+		const target = room.game.players.find((player) => player.id === targetId);
+		if (!voter || voter.isEliminated) return null;
+		if (!target || target.isEliminated) return null;
+		if (voterId === targetId) return null;
 
-	room.game = submitVote(room.game, voterId, targetId);
-	if (allVotesIn(room.game)) {
-		room.game = resolveRound(room.game);
-	}
+		room.game = submitVote(room.game, voterId, targetId);
+		if (allVotesIn(room.game)) {
+			room.game = resolveRound(room.game);
+		}
 
-	return finalizeRoomUpdate(room);
+		return room;
+	});
 }
 
 export async function startNextRound(code: string, hostId: string): Promise<Room | null> {
@@ -442,6 +579,9 @@ export async function removePlayerFromRoom(code: string, hostId: string, playerI
 
 export function updateHeartbeat(room: Room, playerId: string): void {
 	if (!room.game.players.some((player) => player.id === playerId)) return;
+	// FIX: Don't update heartbeats for kicked players — this prevents ghost
+	// players from staying "alive" in the heartbeat map after being removed.
+	if (room.kickedPlayerIds.includes(playerId)) return;
 
 	room.playerHeartbeats[playerId] = Date.now();
 
@@ -472,6 +612,14 @@ function ensureForcedEliminationResult(room: Room, eliminatedPlayerId: string): 
 	}
 
 	const eliminatedPlayer = room.game.players.find((player) => player.id === eliminatedPlayerId);
+
+	// Detect whether the elimination was due to voluntary leave, kick, or disconnect
+	const nameKey = eliminatedPlayer ? getPlayerNameKey(eliminatedPlayer.name) : null;
+	const wasVoluntary = nameKey ? room.voluntaryLeftPlayerNames.includes(nameKey) : false;
+	const wasKicked = room.kickedPlayerIds.includes(eliminatedPlayerId);
+	const wasDisconnected = room.playerHeartbeats[eliminatedPlayerId] === 0;
+	const abandoned = wasVoluntary || wasKicked || wasDisconnected;
+
 	room.game.roundResults = [
 		...room.game.roundResults,
 		{
@@ -480,6 +628,8 @@ function ensureForcedEliminationResult(room: Room, eliminatedPlayerId: string): 
 			eliminatedPlayer: eliminatedPlayerId,
 			wasTie: false,
 			impostorSurvived: eliminatedPlayer?.role !== "impostor",
+			abandoned: abandoned || undefined,
+			abandonedRole: eliminatedPlayer ? (eliminatedPlayer.role as "impostor" | "friend") : null,
 		},
 	];
 }
@@ -496,38 +646,18 @@ export async function updateRoomHeartbeat(code: string, playerId: string): Promi
 			return null;
 		}
 
-		let room: Room;
-		try {
-			const parsed = JSON.parse(raw) as Partial<Room>;
-			if (!parsed || typeof parsed !== "object" || !parsed.game || !parsed.hostId || !parsed.code) {
-				const deleted = await redis.multi().del(key).exec();
-				if (deleted === null) {
+		const room = parseRoom(raw);
+		if (!room) {
+			let deleted;
+			try {
+				deleted = await redis.multi().del(key).exec();
+			} catch (err: any) {
+				if (String(err).includes("One (or more) of the watched keys has been changed")) {
 					continue;
 				}
-				return null;
+				throw err;
 			}
-
-			room = {
-				...parsed,
-				code: normalizeCode(parsed.code),
-				originalHostId: parsed.originalHostId ?? parsed.hostId,
-				lastActivity: parsed.lastActivity ?? Date.now(),
-				impostorHelp: parsed.impostorHelp ?? false,
-				textChatEnabled: parsed.textChatEnabled ?? true,
-				playerHeartbeats: parsed.playerHeartbeats ?? {},
-				disconnectPause: parsed.disconnectPause ?? null,
-				originalPlayerIds: parsed.originalPlayerIds ?? [],
-				kickedPlayerIds: parsed.kickedPlayerIds ?? [],
-				leftPlayerNames: parsed.leftPlayerNames ?? [],
-				voluntaryLeftPlayerNames: parsed.voluntaryLeftPlayerNames ?? [],
-				waitingList: parsed.waitingList ?? [],
-				ended: parsed.ended ?? false,
-			} as Room;
-		} catch {
-			const deleted = await redis.multi().del(key).exec();
-			if (deleted === null) {
-				continue;
-			}
+			if (deleted === null) continue;
 			return null;
 		}
 
@@ -535,7 +665,15 @@ export async function updateRoomHeartbeat(code: string, playerId: string): Promi
 		checkAndSetDisconnectPause(room);
 		room.lastActivity = Date.now();
 
-		const execResult = await redis.multi().set(key, JSON.stringify(room), { EX: ROOM_TTL_SECONDS }).exec();
+		let execResult;
+		try {
+			execResult = await redis.multi().set(key, JSON.stringify(room), { EX: ROOM_TTL_SECONDS }).exec();
+		} catch (err: any) {
+			if (String(err).includes("One (or more) of the watched keys has been changed")) {
+				continue;
+			}
+			throw err;
+		}
 		if (execResult === null) {
 			continue;
 		}
@@ -549,13 +687,20 @@ export async function updateRoomHeartbeat(code: string, playerId: string): Promi
 export function getDisconnectedPlayerIds(room: Room): string[] {
 	if (room.game.phase === "setup") return [];
 	const now = Date.now();
-	return room.game.players
-		.filter((player) => !player.isEliminated)
-		.filter((player) => {
-			const lastSeen = room.playerHeartbeats[player.id];
-			return !lastSeen || now - lastSeen > DISCONNECT_THRESHOLD;
-		})
-		.map((player) => player.id);
+	return (
+		room.game.players
+			.filter((player) => !player.isEliminated)
+			// FIX: Exclude kicked and voluntarily-left players from disconnect detection.
+			// These players remain in the array (for scoreboard) but should not trigger
+			// disconnect pauses or be treated as ghost players.
+			.filter((player) => !room.kickedPlayerIds.includes(player.id))
+			.filter((player) => !room.voluntaryLeftPlayerNames.includes(getPlayerNameKey(player.name)))
+			.filter((player) => {
+				const lastSeen = room.playerHeartbeats[player.id];
+				return !lastSeen || now - lastSeen > DISCONNECT_THRESHOLD;
+			})
+			.map((player) => player.id)
+	);
 }
 
 export function checkAndSetDisconnectPause(room: Room): void {
@@ -646,49 +791,75 @@ export async function notifyPlayerLeft(code: string, playerId: string): Promise<
 	const room = await loadRoom(code);
 	if (!room) return;
 
+	// If the player leaves during setup (e.g. closed tab), treat as a voluntary leave
+	// and remove them from the players list so they don't remain as a "ghost".
+	const player = room.game.players.find((p) => p.id === playerId);
+	if (room.game.phase === "setup") {
+		if (player) {
+			addUnique(room.voluntaryLeftPlayerNames, getPlayerNameKey(player.name));
+		}
+
+		if (room.hostId === playerId) {
+			const others = room.game.players.filter((candidate) => candidate.id !== playerId && !candidate.isEliminated);
+			if (others.length > 0) {
+				room.hostId = others[0].id;
+			}
+		}
+
+		room.game.players = room.game.players.filter((candidate) => candidate.id !== playerId);
+		delete room.playerHeartbeats[playerId];
+		await finalizeRoomUpdate(room);
+		return;
+	}
+
+	// Fallback: mark heartbeat as zero so disconnect handling can pick it up
 	if (room.playerHeartbeats[playerId]) {
 		room.playerHeartbeats[playerId] = 0;
 		await finalizeRoomUpdate(room);
 	}
 }
 
+// AUDIT: Refactored to use updateRoomAtomically to prevent race condition
+// where concurrent replay requests could corrupt state via non-atomic
+// read-modify-write.
 export async function replayRoom(code: string, hostId: string): Promise<Room | null> {
-	const room = await loadRoom(code);
-	if (!room || room.hostId !== hostId) return null;
-	if (room.game.phase !== "game-over") return null;
+	return updateRoomAtomically(code, (room) => {
+		if (room.hostId !== hostId) return null;
+		if (room.game.phase !== "game-over") return null;
 
-	room.game.players = room.game.players.filter((player) => !room.kickedPlayerIds.includes(player.id));
-	room.game.players = room.game.players.filter((player) => !room.voluntaryLeftPlayerNames.includes(player.name.toLowerCase()));
+		room.game.players = room.game.players.filter((player) => !room.kickedPlayerIds.includes(player.id));
+		room.game.players = room.game.players.filter((player) => !room.voluntaryLeftPlayerNames.includes(player.name.toLowerCase()));
 
-	const now = Date.now();
-	room.game.players = room.game.players.filter((player) => {
-		const lastSeen = room.playerHeartbeats[player.id];
-		return Boolean(lastSeen) && now - lastSeen < DISCONNECT_THRESHOLD * 3;
+		const now = Date.now();
+		room.game.players = room.game.players.filter((player) => {
+			const lastSeen = room.playerHeartbeats[player.id];
+			return Boolean(lastSeen) && now - lastSeen < DISCONNECT_THRESHOLD * 3;
+		});
+
+		room.game = replayGame(room.game);
+		room.disconnectPause = null;
+
+		for (const waitingPlayer of room.waitingList) {
+			if (room.game.players.length >= MAX_PLAYERS) break;
+			if (room.game.players.some((player) => player.name.toLowerCase() === waitingPlayer.name.toLowerCase())) continue;
+			const newPlayer = createPlayer(waitingPlayer.name);
+			newPlayer.id = waitingPlayer.id;
+			room.game.players.push(newPlayer);
+			room.playerHeartbeats[newPlayer.id] = Date.now();
+		}
+		room.waitingList = [];
+
+		room.kickedPlayerIds = [];
+		room.leftPlayerNames = [];
+		room.voluntaryLeftPlayerNames = [];
+		room.originalPlayerIds = [];
+
+		room.game.players.forEach((player) => {
+			room.playerHeartbeats[player.id] = now;
+		});
+
+		return room;
 	});
-
-	room.game = replayGame(room.game);
-	room.disconnectPause = null;
-
-	for (const waitingPlayer of room.waitingList) {
-		if (room.game.players.length >= MAX_PLAYERS) break;
-		if (room.game.players.some((player) => player.name.toLowerCase() === waitingPlayer.name.toLowerCase())) continue;
-		const newPlayer = createPlayer(waitingPlayer.name);
-		newPlayer.id = waitingPlayer.id;
-		room.game.players.push(newPlayer);
-		room.playerHeartbeats[newPlayer.id] = Date.now();
-	}
-	room.waitingList = [];
-
-	room.kickedPlayerIds = [];
-	room.leftPlayerNames = [];
-	room.voluntaryLeftPlayerNames = [];
-	room.originalPlayerIds = [];
-
-	room.game.players.forEach((player) => {
-		room.playerHeartbeats[player.id] = now;
-	});
-
-	return finalizeRoomUpdate(room);
 }
 
 export async function isPlayerInRoom(code: string, playerId: string): Promise<boolean> {
@@ -697,60 +868,61 @@ export async function isPlayerInRoom(code: string, playerId: string): Promise<bo
 	return getPresentPlayers(room).some((player) => player.id === playerId);
 }
 
+// AUDIT: Refactored to use updateRoomAtomically to prevent race condition
+// where two concurrent leave requests could corrupt room state via
+// non-atomic read-modify-write.
 export async function leaveRoomVoluntarily(code: string, playerId: string): Promise<void> {
-	const room = await loadRoom(code);
-	if (!room) return;
-
-	const player = room.game.players.find((candidate) => candidate.id === playerId);
-	if (player) {
-		addUnique(room.voluntaryLeftPlayerNames, getPlayerNameKey(player.name));
-	}
-
-	if (room.hostId === playerId) {
-		const others = room.game.players.filter((candidate) => candidate.id !== playerId && !candidate.isEliminated);
-		if (others.length > 0) {
-			room.hostId = others[0].id;
+	await updateRoomAtomically(code, (room) => {
+		const player = room.game.players.find((candidate) => candidate.id === playerId);
+		if (player) {
+			addUnique(room.voluntaryLeftPlayerNames, getPlayerNameKey(player.name));
 		}
-	}
 
-	if (room.game.phase === "setup") {
-		room.game.players = room.game.players.filter((candidate) => candidate.id !== playerId);
-		delete room.playerHeartbeats[playerId];
-		await finalizeRoomUpdate(room);
-		return;
-	}
-
-	if (room.game.phase !== "game-over") {
-		room.game.players = room.game.players.map((candidate) => (candidate.id === playerId ? { ...candidate, isEliminated: true } : candidate));
-
-		if (room.game.phase === "clues" && room.game.textChatEnabled) {
-			const activePlayers = getActivePlayersForClues(room.game);
-			if (room.game.currentPlayerIndex >= activePlayers.length) {
-				room.game.phase = "voting";
-				room.game.currentPlayerIndex = 0;
+		if (room.hostId === playerId) {
+			const others = room.game.players.filter((candidate) => candidate.id !== playerId && !candidate.isEliminated);
+			if (others.length > 0) {
+				room.hostId = others[0].id;
 			}
 		}
 
-		if (room.game.phase === "voting") {
-			const activePlayers = room.game.players.filter((candidate) => !candidate.isEliminated);
-			if (activePlayers.every((candidate) => candidate.votedFor !== null)) {
-				room.game = resolveRound(room.game);
-			}
+		if (room.game.phase === "setup") {
+			room.game.players = room.game.players.filter((candidate) => candidate.id !== playerId);
+			delete room.playerHeartbeats[playerId];
+			return room;
 		}
 
-		evaluateGameOver(room);
-		ensureForcedEliminationResult(room, playerId);
-	}
+		if (room.game.phase !== "game-over") {
+			room.game.players = room.game.players.map((candidate) => (candidate.id === playerId ? { ...candidate, isEliminated: true } : candidate));
 
-	if (room.disconnectPause?.playerId === playerId) {
-		room.disconnectPause = null;
-	}
+			if (room.game.phase === "clues" && room.game.textChatEnabled) {
+				const activePlayers = getActivePlayersForClues(room.game);
+				if (room.game.currentPlayerIndex >= activePlayers.length) {
+					room.game.phase = "voting";
+					room.game.currentPlayerIndex = 0;
+				}
+			}
 
-	if (room.playerHeartbeats[playerId]) {
-		room.playerHeartbeats[playerId] = 0;
-	}
+			if (room.game.phase === "voting") {
+				const activePlayers = room.game.players.filter((candidate) => !candidate.isEliminated);
+				if (activePlayers.every((candidate) => candidate.votedFor !== null)) {
+					room.game = resolveRound(room.game);
+				}
+			}
 
-	await finalizeRoomUpdate(room);
+			evaluateGameOver(room);
+			ensureForcedEliminationResult(room, playerId);
+		}
+
+		if (room.disconnectPause?.playerId === playerId) {
+			room.disconnectPause = null;
+		}
+
+		if (room.playerHeartbeats[playerId]) {
+			room.playerHeartbeats[playerId] = 0;
+		}
+
+		return room;
+	});
 }
 
 export async function leaveWaitingList(code: string, waitingPlayerId: string): Promise<void> {
@@ -778,6 +950,13 @@ export async function endGameForAll(code: string, hostId: string): Promise<Room 
 	const room = await loadRoom(code);
 	if (!room || room.hostId !== hostId) return null;
 
+	// Mark the room as ended and mark all current players as kicked so
+	// their next heartbeat/polling call will receive a 410 and clear
+	// their session immediately.
 	room.ended = true;
+	const playerIds = room.game.players.map((p) => p.id);
+	for (const id of playerIds) {
+		addUnique(room.kickedPlayerIds, id);
+	}
 	return finalizeRoomUpdate(room, ENDED_ROOM_TTL_SECONDS);
 }

@@ -24,7 +24,9 @@
   "noGameData": "No game data found.",
   "leaveRoom": "Leave Room",
   "footer": {
-    "tagline": "The Impostor — A party game of deception and deduction",
+    "tagline": "The Impostor — A deception and deduction game",
     "credit": "Created with ♡ by Fvitu"
   }
+  ,
+  "siteTitle": "The Impostor - Deception game"
 }

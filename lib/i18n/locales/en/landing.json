@@ -1,6 +1,6 @@
 {
   "hero": {
-    "subtitle": "The Party Game of Deception",
+    "subtitle": "The Deception Game",
     "title": "The Impostor",
     "description": "One word. One secret. One liar. Can you find the Impostor hiding among your friends before it is too late?",
     "playOnline": "Play Online",
@@ -16,7 +16,30 @@
     "installStep2Before": "Scroll down and tap",
     "installStep3Before": "Tap",
     "installStep3After": "to confirm",
-    "minPlayers": "3+ players required"
+    "minPlayers": "3+ players required",
+    "leaderboard": "Leaderboard",
+    "login": "Log In",
+    "statsPanel": {
+      "title": "Your stats",
+      "description": "Review your progress and statistics.",
+      "totalPoints": "Points",
+      "totalGames": "Games",
+      "winsAsImpostor": "Impostor wins",
+      "winsAsInnocent": "Innocent wins",
+      "winRate": "Win rate",
+      "winRateDescription": "Calculated across all of your saved matches.",
+      "noGamesYet": "You do not have any saved matches yet.",
+      "visibilityTitle": "Use my stats in the public leaderboard",
+      "visibilityDescription": "If you turn this off, your profile will stop appearing in the public leaderboard and your scores will be ignored there.",
+      "visibilityEnabled": "Your public stats currently count toward the leaderboard.",
+      "visibilityDisabled": "Your stats will still be saved, but they will not appear in the public leaderboard.",
+      "visibilityError": "The preference could not be updated. Try again.",
+      "usernameLabel": "Username",
+      "usernameRules": "2-20 characters, no spaces, letters, numbers, hyphens and underscores only.",
+      "changeUsername": "Change username",
+      "saving": "Saving",
+      "saved": "Saved"
+    }
   },
   "rules": {
     "sectionLabel": "How to Play",

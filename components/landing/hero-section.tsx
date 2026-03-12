@@ -1,19 +1,47 @@
 "use client"
 
 import Link from "next/link"
-import { Smartphone, Wifi } from "lucide-react"
+import { Smartphone, Wifi, Trophy, User } from "lucide-react";
 import { InstallButton } from "@/components/install-button";
 import { Button } from "@/components/ui/button"
 import { useTranslation } from "react-i18next";
+import { useAuth } from "@/components/auth-provider";
+import { UserStatsSheet } from "@/components/landing/user-stats-sheet";
 
 export function HeroSection() {
   const { t } = useTranslation("landing");
+	const { user, loading } = useAuth();
 
   return (
 		<section className="relative flex flex-col items-center justify-center min-h-[100vh] px-4 overflow-hidden">
 			{/* Background Glow */}
 			<div className="absolute inset-0 pointer-events-none">
-				<div className="absolute top-1/3 left-1/2 w-[800px] h-[800px] rounded-full bg-primary/5 blur-3xl animate-hero-glow-drift" />
+				<div className="absolute top-1/2 left-0 right-0 mx-auto -translate-y-1/2 w-[min(80vw,800px)] h-[min(80vw,800px)] rounded-full bg-primary/8 blur-3xl animate-hero-glow-drift transform-gpu" />
+			</div>
+
+			{/* Top-left leaderboard button */}
+			<div className="absolute top-4 left-4 z-20">
+				<Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+					<Link href="/leaderboard">
+						<Trophy className="h-4 w-4 mr-1.5" />
+						{t("hero.leaderboard")}
+					</Link>
+				</Button>
+			</div>
+
+			{/* Top-right auth panel */}
+			<div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+				{!loading &&
+					(user ? (
+						<UserStatsSheet />
+					) : (
+						<Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+							<Link href="/auth">
+								<User className="h-4 w-4 mr-1.5" />
+								{t("hero.login")}
+							</Link>
+						</Button>
+					))}
 			</div>
 
 			<div className="relative z-10 text-center max-w-3xl mx-auto animate-slide-up">

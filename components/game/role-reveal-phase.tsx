@@ -163,9 +163,7 @@ export function RoleRevealPhase() {
 
 					{/* Controls */}
 					<div className="space-y-3">
-						{roundStarter && currentIndex + 1 === activePlayers.length && (
-							<p className="text-xs text-center text-muted-foreground">{t("roleReveal.startingPlayer", { name: roundStarter.name })}</p>
-						)}
+						{/* Starting player announcement is shown when the game advances, not during the last reveal */}
 						<Button
 							onPointerDown={handlePointerDown}
 							onPointerUp={handlePointerUp}

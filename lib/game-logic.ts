@@ -23,6 +23,7 @@ export interface GameState {
 	secretWord: string;
 	hint: string;
 	category: string;
+	categoryId: string;
 	selectedCategory: GameCategorySelection;
 	impostorHelp: boolean;
 	textChatEnabled: boolean;
@@ -34,18 +35,24 @@ export interface GameState {
 }
 
 export interface RoundResult {
-  round: number
-  votes: Record<string, string>
-  eliminatedPlayer: string | null
-  wasTie: boolean
-  impostorSurvived: boolean
+	round: number;
+	votes: Record<string, string>;
+	eliminatedPlayer: string | null;
+	wasTie: boolean;
+	impostorSurvived: boolean;
+	// If this elimination was forced because the player left, was kicked, or disconnected
+	// then `abandoned` is true and `abandonedRole` contains their role at the time.
+	abandoned?: boolean;
+	abandonedRole?: "impostor" | "friend" | null;
 }
 
 export const MAX_PLAYERS = 16;
 export const MAX_IMPOSTORS = 4;
 
 function generateId(): string {
-  return Math.random().toString(36).substring(2, 9)
+	// AUDIT: Use crypto.randomUUID() instead of Math.random() to prevent ID guessing.
+	// Player IDs serve as the sole authentication for game actions (voting, clue submission).
+	return crypto.randomUUID();
 }
 
 export function createPlayer(name: string): Player {
@@ -72,9 +79,11 @@ export function createGame(mode: "pass-and-play" | "online"): GameState {
 		secretWord: "",
 		hint: "",
 		category: "",
+		categoryId: "",
 		selectedCategory: DEFAULT_CATEGORY_SELECTION,
 		impostorHelp: false,
-		textChatEnabled: true,
+		// Disable text chat by default for pass-and-play (offline) games.
+		textChatEnabled: mode === "online",
 		individualVotingEnabled: true,
 		impostorCount: 1,
 		currentPlayerIndex: 0,
@@ -165,6 +174,7 @@ export function assignRoles(game: GameState, options: AssignRolesOptions = {}): 
 		secretWord: selection.word,
 		hint: selection.hint,
 		category: selection.categoryLabel,
+		categoryId: selection.categoryId,
 		selectedCategory: categorySelection,
 		currentPlayerIndex: 0,
 	};
@@ -381,16 +391,56 @@ function calculateRoundScore(player: Player, impostorIds: string[], eliminatedId
 
 export function applyBonuses(players: Player[], winner: "friends" | "impostor"): Player[] {
 	return players.map((p) => {
-		if (p.role === "impostor" && winner === "impostor") {
-			// Impostor bonus +10 for winning the match
-			return { ...p, totalScore: p.totalScore + 10 };
-		} else if (p.role === "friend" && winner === "friends") {
-			// Check if friend voted correctly every round
-			const votedCorrectlyEveryRound = p.scores.every((s) => s === 2);
-			if (votedCorrectlyEveryRound) {
-				return { ...p, totalScore: p.totalScore + 10 };
-			}
+		// Do not award match bonuses to players who were eliminated before
+		// the end of the game — only survivors should receive the +10.
+		if (p.isEliminated) {
+			return p;
 		}
+
+		// Compute how much of the player's totalScore is already represented
+		// by per-round `scores`. This helps us avoid re-applying the same
+		// bonus multiple times (idempotency) and ensures the UI shows the
+		// bonus by adding it to the last round's score.
+		const scoresSum = p.scores.reduce((a, b) => a + b, 0);
+		const implicitBonus = p.totalScore - scoresSum; // may be 0 or >=10 if bonus already applied
+
+		const applyMatchBonus = (bonus: number) => {
+			// If the implicitBonus already includes the match bonus, ensure
+			// it's visible in the last score entry but don't change totalScore.
+			if (implicitBonus >= bonus) {
+				if (p.scores.length > 0) {
+					const last = p.scores.length - 1;
+					// If last score doesn't already include the bonus, add it.
+					if (p.scores[last] < bonus) {
+						const newScores = [...p.scores];
+						newScores[last] = newScores[last] + bonus;
+						return { ...p, scores: newScores };
+					}
+				} else {
+					// totalScore already has the bonus but there are no per-round
+					// scores; add a round entry to show it.
+					return { ...p, scores: [...p.scores, bonus] };
+				}
+				return p;
+			}
+
+			// Otherwise, apply the bonus to both totalScore and the last round
+			// score (or push a new round if none exists) so the UI reflects it.
+			if (p.scores.length > 0) {
+				const newScores = [...p.scores];
+				const last = newScores.length - 1;
+				newScores[last] = newScores[last] + bonus;
+				return { ...p, scores: newScores, totalScore: p.totalScore + bonus };
+			}
+			return { ...p, scores: [...p.scores, bonus], totalScore: p.totalScore + bonus };
+		};
+
+		if (p.role === "impostor" && winner === "impostor") {
+			return applyMatchBonus(10);
+		} else if (p.role === "friend" && winner === "friends") {
+			return applyMatchBonus(10);
+		}
+
 		return p;
 	});
 }
@@ -412,6 +462,8 @@ export function getRoundStarter(game: GameState): Player | null {
 	return getRoundOrderedActivePlayers(game)[0] ?? null;
 }
 
+// NOTE: Room code space is limited (~31^5 = ~28M codes). The 20-attempt retry
+// loop in room-store.ts provides collision handling for concurrent room creation.
 export function generateRoomCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
   let code = ""

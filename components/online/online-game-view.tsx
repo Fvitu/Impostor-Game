@@ -1,14 +1,15 @@
-"use client"
+"use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useRouter } from "next/navigation";
-import type { GameState } from "@/lib/game-logic"
+import type { GameState } from "@/lib/game-logic";
 import { MAX_PLAYERS, getActivePlayersForClues, getActivePlayersForVoting, getMaxImpostorCount, getRoundStarter } from "@/lib/game-logic";
 import type { DisconnectPause } from "@/lib/room-store";
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Switch } from "@/components/ui/switch"
+import { useAuth } from "@/components/auth-provider";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { DEFAULT_CATEGORY_SELECTION, getCategoryLabel, getCategoryOptions, migrateCategorySelection, type GameCategorySelection } from "@/lib/game-data";
 import { CategoryMultiSelect } from "@/components/game/category-multi-select";
 import {
@@ -32,15 +33,18 @@ import {
 	AlertTriangle,
 	Clock,
 	UserX,
+	LoaderCircle,
 	Minus,
 	Plus,
 	LogOut,
 	Power,
 	DoorOpen,
 } from "lucide-react";
-import Link from "next/link"
+import Link from "next/link";
 import { GameNavbar } from "@/components/game/game-navbar";
 import { saveOnlineSession, refreshOnlineSession, clearOnlineSession, saveResultsGame } from "@/lib/storage";
+
+type HostSettingKey = "categorySelection" | "impostorHelp" | "textChatEnabled" | "impostorCount";
 
 interface OnlineGameViewProps {
 	roomCode: string;
@@ -51,6 +55,7 @@ interface OnlineGameViewProps {
 
 export function OnlineGameView({ roomCode, playerId, isHost, onExit }: OnlineGameViewProps) {
 	const { t, i18n } = useTranslation("online");
+	const { user } = useAuth();
 	const router = useRouter();
 	const [game, setGame] = useState<GameState | null>(null);
 	const [hostId, setHostId] = useState<string>("");
@@ -63,9 +68,11 @@ export function OnlineGameView({ roomCode, playerId, isHost, onExit }: OnlineGam
 	const [categorySelection, setCategorySelection] = useState<GameCategorySelection>(DEFAULT_CATEGORY_SELECTION);
 	const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 	const [roomEnded, setRoomEnded] = useState(false);
+	const [savingSetting, setSavingSetting] = useState<HostSettingKey | null>(null);
 	const isIntentionalExitRef = useRef(false);
 	const pendingMutationCountRef = useRef(0);
 	const mutationVersionRef = useRef(0);
+	const statsSavedRef = useRef(false);
 
 	// Auto-adjust impostor count when player count changes
 	useEffect(() => {
@@ -80,6 +87,8 @@ export function OnlineGameView({ roomCode, playerId, isHost, onExit }: OnlineGam
 	// Keep local setup controls in sync with room state, including after reload/reconnect.
 	useEffect(() => {
 		if (!game || game.phase !== "setup") return;
+		// Reset stats tracking when a new game starts (replay)
+		statsSavedRef.current = false;
 		setImpostorHelp(Boolean(game.impostorHelp));
 		setTextChatEnabled(game.textChatEnabled !== false);
 		setImpostorCount(Math.max(1, game.impostorCount || 1));
@@ -97,18 +106,22 @@ export function OnlineGameView({ roomCode, playerId, isHost, onExit }: OnlineGam
 		});
 	}, [roomCode, playerId, isHost]);
 
-	// Notify server when user leaves the page
+	// Save stats for registered users when game ends
 	useEffect(() => {
-		const handleBeforeUnload = () => {
-			if (isIntentionalExitRef.current) {
-				return;
-			}
-			const data = new Blob([JSON.stringify({ action: "player-leaving", code: roomCode, playerId })], { type: "application/json" });
-			navigator.sendBeacon("/api/rooms/action", data);
-		};
-		window.addEventListener("beforeunload", handleBeforeUnload);
-		return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-	}, [roomCode, playerId]);
+		if (!game || game.phase !== "game-over" || !user || statsSavedRef.current) return;
+		statsSavedRef.current = true;
+		fetch("/api/rooms/action", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ action: "save-stats", code: roomCode, playerId }),
+		}).catch(() => {
+			/* stats save is best-effort */
+		});
+	}, [game?.phase, user, roomCode, playerId]);
+
+	// NOTE: Removing the automatic "player-leaving" sendBeacon on unload.
+	// Rely on the heartbeat polling and explicit "leave-room-voluntary" action
+	// so that page reloads or navigations don't mark the player as having left.
 
 	// Poll for game state
 	const fetchState = useCallback(async () => {
@@ -116,18 +129,28 @@ export function OnlineGameView({ roomCode, playerId, isHost, onExit }: OnlineGam
 		try {
 			const res = await fetch(`/api/rooms/state?code=${roomCode}&pid=${playerId}`);
 			if (!res.ok) {
-				// Room ended by host
+				// Room ended by host or player was removed
 				if (res.status === 410) {
-					setRoomEnded(true);
 					clearOnlineSession();
+					onExit?.();
+					router.push("/play/online");
 					return;
 				}
-				// Room no longer exists, clear session
+				// Room not found: allow more retries before redirecting — 404 can be
+				// transient during reloads or short network hiccups.
 				if (res.status === 404) {
-					clearOnlineSession();
+					notFoundRetriesRef.current += 1;
+					if (notFoundRetriesRef.current >= 6) {
+						clearOnlineSession();
+						onExit?.();
+						router.push("/play/online");
+						return;
+					}
+					return;
 				}
 				return;
 			}
+			notFoundRetriesRef.current = 0;
 			const data = await res.json();
 			if (pendingMutationCountRef.current > 0 || requestMutationVersion !== mutationVersionRef.current) {
 				return;
@@ -169,6 +192,7 @@ export function OnlineGameView({ roomCode, playerId, isHost, onExit }: OnlineGam
 	};
 
 	const [isTabVisible, setIsTabVisible] = useState(true);
+	const notFoundRetriesRef = useRef(0);
 
 	useEffect(() => {
 		const handleVisibilityChange = () => setIsTabVisible(document.visibilityState === "visible");
@@ -210,12 +234,16 @@ export function OnlineGameView({ roomCode, playerId, isHost, onExit }: OnlineGam
 			pendingMutationCountRef.current = Math.max(0, pendingMutationCountRef.current - 1);
 		}
 	};
-	const persistHostSettings = async (next: {
-		impostorHelp?: boolean;
-		textChatEnabled?: boolean;
-		impostorCount?: number;
-		categorySelection?: GameCategorySelection;
-	}) => {
+	const persistHostSettings = async (
+		settingKey: HostSettingKey,
+		next: {
+			impostorHelp?: boolean;
+			textChatEnabled?: boolean;
+			impostorCount?: number;
+			categorySelection?: GameCategorySelection;
+		},
+	) => {
+		setSavingSetting(settingKey);
 		setGame((previousGame) => {
 			if (!previousGame || previousGame.phase !== "setup") {
 				return previousGame;
@@ -253,6 +281,7 @@ export function OnlineGameView({ roomCode, playerId, isHost, onExit }: OnlineGam
 			setError(t("game.actionFailed"));
 			fetchState();
 		} finally {
+			setSavingSetting((current) => (current === settingKey ? null : current));
 			pendingMutationCountRef.current = Math.max(0, pendingMutationCountRef.current - 1);
 		}
 	};
@@ -331,6 +360,10 @@ export function OnlineGameView({ roomCode, playerId, isHost, onExit }: OnlineGam
 
 	const me = game.players.find((p) => p.id === playerId);
 	const amHost = playerId === hostId;
+	const isSavingCategory = savingSetting === "categorySelection";
+	const isSavingImpostorHelp = savingSetting === "impostorHelp";
+	const isSavingTextChat = savingSetting === "textChatEnabled";
+	const isSavingImpostorCount = savingSetting === "impostorCount";
 	const categoryOptions = getCategoryOptions(i18n.language);
 	const selectedCategoryLabel = getCategoryLabel(categorySelection, i18n.language);
 
@@ -342,6 +375,14 @@ export function OnlineGameView({ roomCode, playerId, isHost, onExit }: OnlineGam
 					onBack={handleBackToLobby}
 					title={t("game.waitingRoom")}
 					subtitle={<span className="text-xs font-mono text-muted-foreground">{t("game.playersJoined", { count: game.players.length })}</span>}
+					rightSlot={
+						<div className="flex items-center gap-2">
+							<span className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-sm font-mono font-bold text-secondary-foreground">
+								{(me?.name ?? user?.username ?? "")[0] ?? "U"}
+							</span>
+							<span className="text-sm font-medium text-foreground hidden sm:inline">{me?.name ?? user?.username}</span>
+						</div>
+					}
 				/>
 
 				<div className="flex-1 px-4 py-6 max-w-lg mx-auto w-full animate-page-enter">
@@ -398,18 +439,21 @@ export function OnlineGameView({ roomCode, playerId, isHost, onExit }: OnlineGam
 						<div className="space-y-4">
 							<div className="glow-box rounded-lg px-4 py-4">
 								<div className="mb-3">
-									<p className="text-sm font-medium text-foreground">{t("game.wordCategory")}</p>
+									<div className="flex items-center gap-2">
+										<p className="text-sm font-medium text-foreground">{t("game.wordCategory")}</p>
+									</div>
 									<p className="text-xs text-muted-foreground">{t("game.wordCategoryDesc")}</p>
 								</div>
 								<CategoryMultiSelect
 									value={categorySelection}
 									onChange={(value) => {
 										setCategorySelection(value);
-										persistHostSettings({ categorySelection: value });
+										void persistHostSettings("categorySelection", { categorySelection: value });
 									}}
 									options={categoryOptions}
 									allLabel={t("game.allCategories")}
 									displayLabel={selectedCategoryLabel}
+									isSaving={isSavingCategory}
 								/>
 							</div>
 							<div className="glow-box flex items-center justify-between rounded-lg px-4 py-4">
@@ -417,26 +461,34 @@ export function OnlineGameView({ roomCode, playerId, isHost, onExit }: OnlineGam
 									<p className="text-sm font-medium text-foreground">{t("game.impostorHint")}</p>
 									<p className="text-xs text-muted-foreground">{t("game.showCategory")}</p>
 								</div>
-								<Switch
-									checked={impostorHelp}
-									onCheckedChange={(checked) => {
-										setImpostorHelp(checked);
-										persistHostSettings({ impostorHelp: checked });
-									}}
-								/>
+								<div className="flex items-center gap-3">
+									{isSavingImpostorHelp ? <LoaderCircle className="h-4 w-4 animate-spin text-primary" /> : null}
+									<Switch
+										checked={impostorHelp}
+										onCheckedChange={(checked) => {
+											setImpostorHelp(checked);
+											void persistHostSettings("impostorHelp", { impostorHelp: checked });
+										}}
+										disabled={isSavingImpostorHelp}
+									/>
+								</div>
 							</div>
 							<div className="glow-box flex items-center justify-between rounded-lg px-4 py-4">
 								<div>
 									<p className="text-sm font-medium text-foreground">{t("game.textChat")}</p>
 									<p className="text-xs text-muted-foreground">{t("game.textChatDesc")}</p>
 								</div>
-								<Switch
-									checked={textChatEnabled}
-									onCheckedChange={(checked) => {
-										setTextChatEnabled(checked);
-										persistHostSettings({ textChatEnabled: checked });
-									}}
-								/>
+								<div className="flex items-center gap-3">
+									{isSavingTextChat ? <LoaderCircle className="h-4 w-4 animate-spin text-primary" /> : null}
+									<Switch
+										checked={textChatEnabled}
+										onCheckedChange={(checked) => {
+											setTextChatEnabled(checked);
+											void persistHostSettings("textChatEnabled", { textChatEnabled: checked });
+										}}
+										disabled={isSavingTextChat}
+									/>
+								</div>
 							</div>
 							{game.players.length >= 3 &&
 								(() => {
@@ -450,15 +502,16 @@ export function OnlineGameView({ roomCode, playerId, isHost, onExit }: OnlineGam
 												</p>
 											</div>
 											<div className="flex items-center gap-2">
+												{isSavingImpostorCount ? <LoaderCircle className="h-4 w-4 animate-spin text-primary" /> : null}
 												<Button
 													variant="outline"
 													size="icon-sm"
 													onClick={() => {
 														const next = Math.max(1, impostorCount - 1);
 														setImpostorCount(next);
-														persistHostSettings({ impostorCount: next });
+														void persistHostSettings("impostorCount", { impostorCount: next });
 													}}
-													disabled={impostorCount <= 1}
+													disabled={impostorCount <= 1 || isSavingImpostorCount}
 													className="border-border text-foreground hover:bg-secondary hover:text-secondary-foreground">
 													<Minus className="h-4 w-4" />
 												</Button>
@@ -469,9 +522,9 @@ export function OnlineGameView({ roomCode, playerId, isHost, onExit }: OnlineGam
 													onClick={() => {
 														const next = Math.min(maxImp, impostorCount + 1);
 														setImpostorCount(next);
-														persistHostSettings({ impostorCount: next });
+														void persistHostSettings("impostorCount", { impostorCount: next });
 													}}
-													disabled={impostorCount >= maxImp}
+													disabled={impostorCount >= maxImp || isSavingImpostorCount}
 													className="border-border text-foreground hover:bg-secondary hover:text-secondary-foreground">
 													<Plus className="h-4 w-4" />
 												</Button>
@@ -479,19 +532,23 @@ export function OnlineGameView({ roomCode, playerId, isHost, onExit }: OnlineGam
 										</div>
 									);
 								})()}
-							<Button
-								onClick={() => doAction("start", { impostorHelp, textChatEnabled, impostorCount, categorySelection, language: i18n.language })}
-								disabled={game.players.length < 3}
-								size="lg"
-								className="w-full h-14 text-base bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40">
-								<Play className="h-5 w-5 mr-2" />
-								{t("common:startGame")}
-							</Button>
-							{game.players.length < 3 && (
-								<p className="text-xs text-center text-muted-foreground font-mono">
-									{t("common:needMorePlayers", { count: 3 - game.players.length })}
-								</p>
-							)}
+							<div className="mt-3">
+								{game.players.length < 3 ? (
+									<p className="text-xs text-center text-muted-foreground font-mono mb-3">
+										{t("common:needMorePlayers", { count: 3 - game.players.length })}
+									</p>
+								) : null}
+								<Button
+									onClick={() =>
+										doAction("start", { impostorHelp, textChatEnabled, impostorCount, categorySelection, language: i18n.language })
+									}
+									disabled={game.players.length < 3}
+									size="lg"
+									className="w-full h-14 text-base bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40">
+									<Play className="h-5 w-5 mr-2" />
+									{t("common:startGame")}
+								</Button>
+							</div>
 						</div>
 					)}
 					{!amHost && (
@@ -533,7 +590,7 @@ export function OnlineGameView({ roomCode, playerId, isHost, onExit }: OnlineGam
 								)}
 							</div>
 							<Users className="h-8 w-8 text-muted-foreground mx-auto mb-3 animate-pulse-glow" />
-							<p className="text-sm text-muted-foreground">{t("game.waitingForHost")}</p>
+							<p className="text-sm text-muted-foreground text-center">{t("game.waitingForHost")}</p>
 						</div>
 					)}
 
@@ -694,8 +751,12 @@ function OnlineRoleCard({ game, isImpostor, roleRevealed, onToggle }: { game: Ga
 
 	return (
 		<div
-			className={`rounded-xl p-4 mb-6 border ${
-				roleRevealed ? (isImpostor ? "border-primary/30 bg-primary/5" : "border-success/30 bg-success/5") : "glow-box border-border"
+			className={`rounded-xl p-4 mb-6 border flex flex-col justify-start transition-all ${
+				roleRevealed
+					? isImpostor
+						? "border-primary/30 bg-primary/5"
+						: "border-success/30 bg-success/5"
+					: "glow-box border-border h-28 overflow-hidden"
 			}`}>
 			<div className="flex items-center justify-between mb-3">
 				<p className="text-xs font-mono text-muted-foreground">{t("clues.yourRole", { ns: "online" })}</p>
@@ -718,8 +779,6 @@ function OnlineRoleCard({ game, isImpostor, roleRevealed, onToggle }: { game: Ga
 				<div className="invisible col-start-1 row-start-1 pointer-events-none" aria-hidden="true">
 					<div className="grid">
 						<div className="col-start-1 row-start-1">{renderHiddenFace()}</div>
-						<div className="col-start-1 row-start-1">{renderRevealedFace(false)}</div>
-						<div className="col-start-1 row-start-1">{renderRevealedFace(true)}</div>
 					</div>
 				</div>
 				<div className={`${roleRevealed ? "visible" : "invisible pointer-events-none"} col-start-1 row-start-1`} aria-hidden={!roleRevealed}>
@@ -1126,7 +1185,26 @@ function OnlineInGame({
 					) : (
 						eliminatedPlayer && (
 							<div>
-								{!lastResult.impostorSurvived ? (
+								{lastResult.abandoned ? (
+									lastResult.abandonedRole === "impostor" ? (
+										<>
+											<Skull className="h-12 w-12 text-destructive mx-auto mb-4" />
+											<h2 className="text-2xl font-bold text-destructive mb-3">{t("game:resolution.impostorAbandoned")}</h2>
+											<p className="text-sm text-muted-foreground">
+												<span className="font-bold text-foreground">{eliminatedPlayer.name}</span> {t("game:resolution.wasImpostor")}
+											</p>
+										</>
+									) : (
+										<>
+											<Skull className="h-12 w-12 text-destructive mx-auto mb-4" />
+											<h2 className="text-2xl font-bold text-destructive mb-3">{t("game:resolution.innocentAbandoned")}</h2>
+											<p className="text-sm text-muted-foreground">
+												<span className="font-bold text-foreground">{eliminatedPlayer.name}</span>{" "}
+												{t("game:resolution.wasFriendOnline")}
+											</p>
+										</>
+									)
+								) : !lastResult.impostorSurvived ? (
 									<>
 										<Trophy className="h-12 w-12 text-accent mx-auto mb-4" />
 										<h2 className="text-2xl font-bold text-accent mb-3">{t("game:resolution.impostorFound")}</h2>
@@ -1197,7 +1275,11 @@ function OnlineInGame({
 										<RotateCcw className="h-5 w-5 mr-2" />
 										{t("common:playAgainSamePlayers")}
 									</Button>
-									<Button onClick={onEndGame} variant="ghost" size="sm" className="w-full mt-2 text-destructive hover:bg-destructive/10">
+									<Button
+										onClick={() => setShowLeaveConfirm(true)}
+										variant="ghost"
+										size="sm"
+										className="w-full mt-2 text-destructive hover:bg-destructive hover:text-white">
 										<Power className="h-4 w-4 mr-2" />
 										{t("leave.endForEveryone")}
 									</Button>
@@ -1222,13 +1304,18 @@ function OnlineInGame({
 								{t("common:nextRound")}
 								<ArrowRight className="h-5 w-5 ml-2" />
 							</Button>
-							<Button onClick={onEndGame} variant="ghost" size="sm" className="w-full text-destructive hover:bg-destructive/10">
+							<Button
+								onClick={() => setShowLeaveConfirm(true)}
+								variant="ghost"
+								size="sm"
+								className="w-full text-destructive hover:bg-destructive hover:text-white">
 								<Power className="h-4 w-4 mr-2" />
 								{t("leave.endForEveryone")}
 							</Button>
 						</div>
 					) : (
 						<div className="text-center py-4">
+							<Users className="h-6 w-6 text-muted-foreground mx-auto mb-2 animate-pulse-glow" />
 							<p className="text-sm text-muted-foreground">{t("resolution.waitingNextRound")}</p>
 						</div>
 					)}

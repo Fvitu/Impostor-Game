@@ -30,40 +30,44 @@ export default function OnlinePlayPage() {
 				return;
 			}
 
-			try {
-				// Verify the session is still valid
-				const res = await fetch(`/api/rooms/state?code=${saved.roomCode}&pid=${saved.playerId}`);
-				if (res.status === 410) {
-					// Room was ended by host
-					clearOnlineSession();
-					setChecking(false);
-					return;
-				}
-				if (res.ok) {
-					const data = await res.json();
-					// Check if our player is still in the room
-					const stillInRoom = data.game?.players?.some((p: { id: string }) => p.id === saved.playerId);
-					if (stillInRoom) {
-						setSession({
-							code: saved.roomCode,
-							playerId: saved.playerId,
-							isHost: saved.playerId === data.hostId,
-						});
-						// Update session with latest host status
-						saveOnlineSession({
-							...saved,
-							isHost: saved.playerId === data.hostId,
-						});
+			// Try a few times before giving up — transient network errors or
+			// quick server-side propagation can cause false negatives on reload.
+			for (let attempt = 0; attempt < 4; attempt++) {
+				try {
+					const res = await fetch(`/api/rooms/state?code=${saved.roomCode}&pid=${saved.playerId}`);
+					if (res.status === 410) {
+						// Room was ended by host — definitely clear session
+						clearOnlineSession();
 						setChecking(false);
 						return;
 					}
+					if (res.ok) {
+						const data = await res.json();
+						const stillInRoom = data.game?.players?.some((p: { id: string }) => p.id === saved.playerId);
+						if (stillInRoom) {
+							setSession({
+								code: saved.roomCode,
+								playerId: saved.playerId,
+								isHost: saved.playerId === data.hostId,
+							});
+							saveOnlineSession({
+								...saved,
+								isHost: saved.playerId === data.hostId,
+							});
+							setChecking(false);
+							return;
+						}
+					}
+				} catch {
+					// transient network error — retry
 				}
-			} catch {
-				// Room doesn't exist or network error
+				// small backoff between attempts
+				await new Promise((r) => setTimeout(r, 350));
 			}
 
-			// Session is invalid, clear it
-			clearOnlineSession();
+			// Couldn't verify session now — keep saved session and let the
+			// in-page polling attempt reconnection instead of aggressively
+			// clearing the session on transient failures.
 			setChecking(false);
 		};
 

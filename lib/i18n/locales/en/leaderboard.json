@@ -1,0 +1,14 @@
+{
+	"title": "Leaderboard",
+	"subtitle": "Top players ranked by score",
+	"filterByCategory": "Filter by Category",
+	"allCategories": "All",
+	"noEntries": "No players on the leaderboard yet",
+	"noEntriesHint": "Play online games as a registered user to appear here!",
+	"player": "Player",
+	"points": "Points",
+	"winsImpostor": "Imp. Wins",
+	"winsInnocent": "Inn. Wins",
+	"games": "Games",
+	"refresh": "Refresh"
+}

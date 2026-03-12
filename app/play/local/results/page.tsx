@@ -12,7 +12,7 @@ import { getResultsGame, clearResultsGame, saveLocalGameState } from "@/lib/stor
 import { replayGame } from "@/lib/game-logic";
 
 export default function LocalResultsPage() {
-	const { t } = useTranslation('common');
+	const { t } = useTranslation("common");
 	const router = useRouter();
 	const [game, setGame] = useState<GameState | null>(null);
 	const [loaded, setLoaded] = useState(false);
@@ -37,11 +37,11 @@ export default function LocalResultsPage() {
 		return (
 			<div className="min-h-dvh bg-background flex items-center justify-center px-4">
 				<div className="text-center animate-page-enter">
-					<p className="text-sm text-muted-foreground mb-4">{t('noGameData')}</p>
+					<p className="text-sm text-muted-foreground mb-4">{t("noGameData")}</p>
 					<Button asChild variant="outline" className="border-border text-foreground hover:bg-secondary hover:text-secondary-foreground">
 						<Link href="/">
 							<Home className="h-4 w-4 mr-2" />
-							{t('backToHome')}
+							{t("backToHome")}
 						</Link>
 					</Button>
 				</div>

@@ -61,7 +61,9 @@ export function VotingPhase() {
 
 						{!game.textChatEnabled && <p className="text-sm text-muted-foreground text-center mb-4">{t("voting.textChatDisabled")}</p>}
 						{!game.textChatEnabled && roundStarter && (
-							<p className="text-xs text-center text-muted-foreground mb-6">{t("voting.startingPlayer", { name: roundStarter.name })}</p>
+							<div className="mb-6 glow-box rounded-lg px-4 py-3 text-center animate-page-enter animate-page-enter-delay-1">
+								<p className="text-sm text-foreground">{t("voting.startingPlayer", { name: roundStarter.name })}</p>
+							</div>
 						)}
 
 						<div className="space-y-2 mb-6">
@@ -165,9 +167,9 @@ export function VotingPhase() {
 						{phase === "pass" ? (
 							<div className="flex-1 flex flex-col items-center justify-center text-center animate-page-enter animate-page-enter-delay-1">
 								{!game.textChatEnabled && roundStarter && (
-									<p className="text-xs font-mono text-muted-foreground uppercase mb-3">
-										{t("voting.startingPlayer", { name: roundStarter.name })}
-									</p>
+									<div className="mb-6 glow-box rounded-lg px-4 py-3 text-center animate-page-enter animate-page-enter-delay-1">
+										<p className="text-sm text-foreground">{t("voting.startingPlayer", { name: roundStarter.name })}</p>
+									</div>
 								)}
 								<h2 className="text-2xl font-bold text-foreground mb-2">{currentVoter.name}</h2>
 								<p className="text-sm text-muted-foreground mb-8">{t("voting.passDevice")}</p>

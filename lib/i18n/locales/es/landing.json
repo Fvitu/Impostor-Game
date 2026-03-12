@@ -1,6 +1,6 @@
 {
   "hero": {
-    "subtitle": "El Juego de Mesa del Engaño",
+    "subtitle": "El Juego del Engaño",
     "title": "El Impostor",
     "description": "Una palabra. Un secreto. Un mentiroso. ¿Puedes encontrar al Impostor escondido entre tus amigos antes de que sea demasiado tarde?",
     "playOnline": "Jugar Online",
@@ -16,7 +16,30 @@
     "installStep2Before": "Desplázate hacia abajo y toca",
     "installStep3Before": "Toca",
     "installStep3After": "para confirmar",
-    "minPlayers": "Se requieren 3+ jugadores"
+    "minPlayers": "Se requieren 3+ jugadores",
+    "leaderboard": "Clasificación",
+    "login": "Iniciar Sesión",
+    "statsPanel": {
+      "title": "Tus estadísticas",
+      "description": "Revisa tu progreso y estadísticas.",
+      "totalPoints": "Puntos",
+      "totalGames": "Partidas",
+      "winsAsImpostor": "Victorias como Impostor",
+      "winsAsInnocent": "Victorias como Inocente",
+      "winRate": "Porcentaje de victoria",
+      "winRateDescription": "Calculado sobre todas tus partidas guardadas.",
+      "noGamesYet": "Aún no tienes partidas guardadas.",
+      "visibilityTitle": "Usar mis estadísticas en el leaderboard público",
+      "visibilityDescription": "Si lo desactivas, tu perfil dejará de aparecer en la clasificación pública y tus puntajes serán ignorados.",
+      "visibilityEnabled": "Tus estadísticas públicas cuentan para el leaderboard.",
+      "visibilityDisabled": "Tus estadísticas seguirán guardadas, pero no aparecerán en el leaderboard público.",
+      "visibilityError": "No se pudo actualizar la preferencia. Intenta otra vez.",
+      "usernameLabel": "Nombre de usuario",
+      "usernameRules": "Entre 2 y 20 caracteres, sin espacios, solo letras, números, guiones y guiones bajos.",
+      "changeUsername": "Cambiar nombre",
+      "saving": "Guardando",
+      "saved": "Guardado"
+    }
   },
   "rules": {
     "sectionLabel": "Cómo Jugar",

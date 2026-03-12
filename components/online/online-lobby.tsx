@@ -1,23 +1,35 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { ArrowLeft, Clock, Clipboard, DoorOpen, Wifi } from "lucide-react";
+import { SessionAccessPanel } from "@/components/auth/session-access-panel";
+import { useAuth } from "@/components/auth-provider";
+import { GameNavbar } from "@/components/game/game-navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowLeft, Wifi, UserPlus, Pencil, Check, Clock, DoorOpen, Clipboard } from "lucide-react";
-import Link from "next/link";
-import { GameNavbar } from "@/components/game/game-navbar";
-import { getSavedPlayerName, savePlayerName, saveWaitingSession, clearWaitingSession } from "@/lib/storage";
+import { validatePlayerName } from "@/lib/player-name";
+import { clearWaitingSession, getSavedPlayerName, saveWaitingSession } from "@/lib/storage";
 
 interface OnlineLobbyProps {
 	onJoined: (code: string, playerId: string, isHost: boolean) => void;
 }
 
+type LobbyMode = "choose" | "session-gate" | "create" | "join" | "waiting";
+type PendingAction = "create" | "join" | null;
+
+function getValidGuestSessionName(): string {
+	const savedName = getSavedPlayerName();
+	const validation = validatePlayerName(savedName);
+	return validation.isValid ? validation.value : "";
+}
+
 export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
-	const { t } = useTranslation("online");
-	const [mode, setMode] = useState<"choose" | "create" | "join" | "waiting">("choose");
-	const [name, setName] = useState("");
-	const [nameEditable, setNameEditable] = useState(true);
+	const { t } = useTranslation(["online", "auth"]);
+	const { user } = useAuth();
+	const [mode, setMode] = useState<LobbyMode>("choose");
+	const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+	const [guestSessionName, setGuestSessionName] = useState("");
 	const [roomCode, setRoomCode] = useState("");
 	const [error, setError] = useState("");
 	const [loading, setLoading] = useState(false);
@@ -25,31 +37,54 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 	const [waitingPosition, setWaitingPosition] = useState(0);
 	const [waitingRoomCode, setWaitingRoomCode] = useState("");
 
-	// Load saved name on mount
 	useEffect(() => {
-		const savedName = getSavedPlayerName();
-		if (savedName) {
-			setName(savedName);
-			setNameEditable(false); // Lock name, show pencil to edit
-		}
+		setGuestSessionName(getValidGuestSessionName());
 	}, []);
 
+	const sessionName = user?.username ?? guestSessionName;
+	const hasSessionIdentity = sessionName.length > 0;
+
+	const openFlow = (nextAction: Exclude<PendingAction, null>) => {
+		setPendingAction(nextAction);
+		setError("");
+		setLoading(false);
+		setMode(hasSessionIdentity ? nextAction : "session-gate");
+	};
+
+	const handleSessionResolved = () => {
+		if (pendingAction) {
+			setMode(pendingAction);
+		}
+	};
+
+	const handleGuestResolved = (guestName: string) => {
+		setGuestSessionName(guestName);
+		handleSessionResolved();
+	};
+
 	const handleCreate = async () => {
-		if (!name.trim()) return;
+		if (!sessionName) {
+			setMode("session-gate");
+			return;
+		}
+
 		setLoading(true);
 		setError("");
 		try {
 			const res = await fetch("/api/rooms/create", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ hostName: name.trim() }),
+				body: JSON.stringify({ hostName: sessionName }),
 			});
+
 			const data = await res.json();
-			if (!res.ok) throw new Error(data.error);
-			savePlayerName(name.trim());
+			if (!res.ok) {
+				throw new Error(data.error);
+			}
+
 			onJoined(data.code, data.playerId, true);
-		} catch (e: unknown) {
-			setError(e instanceof Error ? e.message : t("lobby.failedCreate"));
+		} catch (reason: unknown) {
+			setError(reason instanceof Error ? reason.message : t("lobby.failedCreate"));
 		} finally {
 			setLoading(false);
 		}
@@ -57,33 +92,41 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 
 	const handleJoin = async (codeParam?: string) => {
 		const codeToUse = (codeParam ?? roomCode).trim().toUpperCase();
-		if (!name.trim() || !codeToUse) return;
+		if (!sessionName) {
+			setMode("session-gate");
+			return;
+		}
+
+		if (!codeToUse) {
+			return;
+		}
+
 		setLoading(true);
 		setError("");
 		try {
 			const res = await fetch("/api/rooms/join", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ code: codeToUse, playerName: name.trim() }),
+				body: JSON.stringify({ code: codeToUse, playerName: sessionName }),
 			});
-			const data = await res.json();
-			if (!res.ok) throw new Error(data.error);
 
-			savePlayerName(name.trim());
+			const data = await res.json();
+			if (!res.ok) {
+				throw new Error(data.error);
+			}
 
 			if (data.status === "waiting") {
-				// Player added to waiting list
 				setWaitingPlayerId(data.waitingPlayerId);
 				setWaitingPosition(data.position);
 				setWaitingRoomCode(data.code);
-				saveWaitingSession({ roomCode: data.code, waitingPlayerId: data.waitingPlayerId, playerName: name.trim() });
+				saveWaitingSession({ roomCode: data.code, waitingPlayerId: data.waitingPlayerId, playerName: sessionName });
 				setMode("waiting");
-			} else {
-				// Joined or rejoined
-				onJoined(data.code, data.playerId, data.status === "joined" && false);
+				return;
 			}
-		} catch (e: unknown) {
-			setError(e instanceof Error ? e.message : t("lobby.failedJoin"));
+
+			onJoined(data.code, data.playerId, false);
+		} catch (reason: unknown) {
+			setError(reason instanceof Error ? reason.message : t("lobby.failedJoin"));
 		} finally {
 			setLoading(false);
 		}
@@ -98,49 +141,57 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 					.match(/[A-Z0-9]/g)
 					?.join("")
 					.slice(0, 5) ?? "";
+
 			if (!sanitized) {
 				setError(t("lobby.noValidCode"));
 				return;
 			}
+
 			setRoomCode(sanitized);
-			// Auto-join if name exists
-			if (name.trim()) {
+			if (hasSessionIdentity) {
 				await handleJoin(sanitized);
 			}
-		} catch (err) {
+		} catch {
 			setError(t("lobby.clipboardError"));
 		}
 	};
 
-	// Poll for waiting list promotion
 	const pollWaiting = useCallback(async () => {
-		if (mode !== "waiting" || !waitingRoomCode || !waitingPlayerId) return;
+		if (mode !== "waiting" || !waitingRoomCode || !waitingPlayerId) {
+			return;
+		}
+
 		try {
 			const res = await fetch(`/api/rooms/state?code=${waitingRoomCode}&wid=${waitingPlayerId}`);
 			if (!res.ok) {
 				if (res.status === 404 || res.status === 410) {
-					// Room gone or player removed from waiting list
 					clearWaitingSession();
 					setMode("join");
 					setError(t("lobby.roomNoLongerAvailable"));
 				}
 				return;
 			}
+
 			const data = await res.json();
 			if (data.promoted) {
-				// Player has been added to the game
 				clearWaitingSession();
 				onJoined(data.code, data.playerId, false);
-			} else if (data.waiting) {
+				return;
+			}
+
+			if (data.waiting) {
 				setWaitingPosition(data.position);
 			}
 		} catch {
-			// Silently retry
+			// silently retry
 		}
-	}, [mode, waitingRoomCode, waitingPlayerId, onJoined]);
+	}, [mode, onJoined, t, waitingPlayerId, waitingRoomCode]);
 
 	useEffect(() => {
-		if (mode !== "waiting") return;
+		if (mode !== "waiting") {
+			return;
+		}
+
 		const interval = setInterval(pollWaiting, 4000);
 		return () => clearInterval(interval);
 	}, [mode, pollWaiting]);
@@ -155,52 +206,19 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 		} catch {
 			// ignore
 		}
+
 		clearWaitingSession();
 		setMode("choose");
 		setWaitingPlayerId("");
 		setWaitingRoomCode("");
 	};
 
-	// Reusable name input with edit toggle
-	const renderNameField = (inputId: string) => (
-		<div>
-			<label htmlFor={inputId} className="block text-sm font-medium text-foreground mb-2">
-				{t("lobby.yourName")}
-			</label>
-			<div className="flex gap-2">
-				<Input
-					id={inputId}
-					placeholder={t("lobby.enterName")}
-					value={name}
-					onChange={(e) => setName(e.target.value)}
-					maxLength={20}
-					disabled={!nameEditable}
-					className={`h-12 text-base border-border text-foreground placeholder:text-muted-foreground ${!nameEditable ? "opacity-70" : ""}`}
-					autoComplete="off"
-				/>
-				{!nameEditable ? (
-					<Button
-						variant="ghost"
-						size="icon"
-						onClick={() => setNameEditable(true)}
-						className="h-12 w-12 shrink-0 text-muted-foreground hover:text-foreground"
-						aria-label={t("lobby.editName")}>
-						<Pencil className="h-4 w-4" />
-					</Button>
-				) : name.trim() && getSavedPlayerName() ? (
-					<Button
-						variant="ghost"
-						size="icon"
-						onClick={() => {
-							savePlayerName(name.trim());
-							setNameEditable(false);
-						}}
-						className="h-12 w-12 shrink-0 text-muted-foreground hover:text-foreground"
-						aria-label={t("lobby.confirmName")}>
-						<Check className="h-4 w-4" />
-					</Button>
-				) : null}
-			</div>
+	const renderSessionCard = () => (
+		<div className="rounded-lg border border-border bg-secondary/40 px-4 py-4">
+			<p className="text-sm font-medium text-foreground">{user ? t("lobby.sessionAccountTitle") : t("lobby.sessionGuestTitle")}</p>
+			<p className="text-xs text-muted-foreground mt-1">
+				{user ? t("lobby.sessionAccountDescription", { username: sessionName }) : t("lobby.sessionGuestDescription", { username: sessionName })}
+			</p>
 		</div>
 	);
 
@@ -217,13 +235,13 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 							<p className="text-sm text-muted-foreground mt-2">{t("lobby.eachPlayerJoins")}</p>
 						</div>
 						<Button
-							onClick={() => setMode("create")}
+							onClick={() => openFlow("create")}
 							size="lg"
 							className="w-full h-14 text-base bg-primary text-primary-foreground hover:bg-primary/90">
 							{t("lobby.createRoom")}
 						</Button>
 						<Button
-							onClick={() => setMode("join")}
+							onClick={() => openFlow("join")}
 							size="lg"
 							variant="outline"
 							className="w-full h-14 text-base border-border text-foreground hover:bg-secondary hover:text-secondary-foreground">
@@ -232,11 +250,27 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 					</div>
 				)}
 
+				{mode === "session-gate" && pendingAction && (
+					<SessionAccessPanel
+						title={pendingAction === "create" ? t("lobby.createRoom") : t("lobby.joinRoom")}
+						description={pendingAction === "create" ? t("lobby.createRoomAuthDescription") : t("lobby.joinRoomAuthDescription")}
+						guestNote={t("auth:guestNote")}
+						showChooseBack
+						onBack={() => {
+							setPendingAction(null);
+							setMode("choose");
+						}}
+						onAuthenticated={handleSessionResolved}
+						onGuest={handleGuestResolved}
+					/>
+				)}
+
 				{mode === "create" && (
 					<div className="w-full space-y-4 animate-slide-up glow-box rounded-xl p-6 transition-all">
 						<Button
 							variant="ghost"
 							onClick={() => {
+								setPendingAction(null);
 								setMode("choose");
 								setError("");
 							}}
@@ -246,11 +280,11 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 						</Button>
 						<h2 className="text-xl font-bold text-foreground mb-6">{t("lobby.createRoom")}</h2>
 						<div className="space-y-4">
-							{renderNameField("host-name")}
+							{renderSessionCard()}
 							{error && <p className="text-sm text-destructive">{error}</p>}
 							<Button
 								onClick={handleCreate}
-								disabled={!name.trim() || loading}
+								disabled={!hasSessionIdentity || loading}
 								size="lg"
 								className="w-full h-14 text-base bg-primary text-primary-foreground hover:bg-primary/90">
 								{loading ? t("lobby.creating") : t("lobby.createRoomBtn")}
@@ -264,6 +298,7 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 						<Button
 							variant="ghost"
 							onClick={() => {
+								setPendingAction(null);
 								setMode("choose");
 								setError("");
 							}}
@@ -273,7 +308,7 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 						</Button>
 						<h2 className="text-xl font-bold text-foreground mb-6">{t("lobby.joinRoom")}</h2>
 						<div className="space-y-4">
-							{renderNameField("join-name")}
+							{renderSessionCard()}
 							<div>
 								<label htmlFor="room-code" className="block text-sm font-medium text-foreground mb-2">
 									{t("lobby.roomCode")}
@@ -283,7 +318,7 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 										id="room-code"
 										placeholder={t("lobby.roomCodePlaceholder")}
 										value={roomCode}
-										onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+										onChange={(event) => setRoomCode(event.target.value.toUpperCase())}
 										maxLength={5}
 										className="h-12 text-base text-center tracking-[0.3em] font-mono border-border text-foreground placeholder:text-muted-foreground uppercase flex-1"
 										autoComplete="off"
@@ -304,10 +339,9 @@ export function OnlineLobby({ onJoined }: OnlineLobbyProps) {
 								onClick={() => {
 									void handleJoin();
 								}}
-								disabled={!name.trim() || !roomCode.trim() || loading}
+								disabled={!hasSessionIdentity || roomCode.trim().length !== 5 || loading}
 								size="lg"
 								className="w-full h-14 text-base bg-primary text-primary-foreground hover:bg-primary/90">
-								<UserPlus className="h-5 w-5 mr-2" />
 								{loading ? t("lobby.joining") : t("lobby.joinRoomBtn")}
 							</Button>
 						</div>
