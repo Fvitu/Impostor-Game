@@ -228,6 +228,17 @@ npm run lint    # ESLint
 | `impostor:leaderboard:cat:<category>` | Sorted set: userId → category points |
 | `impostor:stats-saved:<CODE>:<PID>` | Dedup key for save-stats (TTL 10 min) |
 
+
+## AI statement
+
+I used AI as a pair programmer, but my priority was always to understand and write the code myself:
+
+- Initial UI Design: The first frontend version was generated with an AI web design tool to get a React/TS boilerplate quickly. I then heavily modified it, rewriting components and rebuilding the layout until little of the original remained.
+- Game Logic & Core Features: I wrote the logic, Redis backend, and auth system myself. AI helped me get unstuck with unfamiliar libraries like jose and Redis WATCH/EXEC patterns.
+- Styling: Animations and glassmorphism were coded manually. AI occasionally suggested Tailwind classes or visual ideas.
+- Documentation: Used AI to quickly look up react-i18next and Next.js App Router patterns without breaking flow.
+- Word & Clue Database: AI generated most of the secret words and clues across both languages, but it often repeated entries or got things wrong, so I had to manually review and clean everything up.
+
 ## Contributing
 
 The project has no automated tests yet. If you want to contribute, branch off `main`, keep changes focused, and open a PR with a description of what changed and why. TypeScript errors are currently suppressed at build time — fixes are welcome.
