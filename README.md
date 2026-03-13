@@ -5,16 +5,16 @@ A multiplayer social deduction game where players share clues about a secret wor
 ## Screenshots
 
 <!-- Landing / home screen -->
-![Landing](public\readme\Landing.png)
+![Landing](public/readme/Landing.png)
 
 <!-- Setup — adding players and configuring the game -->
-![Setup](public\readme\Setup.png)
+![Setup](public/readme/Setup.png)
 
 <!-- Role reveal — each player checks their role privately -->
-![Role Reveal](public\readme\Role-reveal.png)
+![Role Reveal](public/readme/Role-reveal.png)
 
 <!-- Round resolution — who was eliminated -->
-![Resolution](public\readme\Resolution.png)
+![Resolution](public/readme/Resolution.png)
 
 ## What is this
 
