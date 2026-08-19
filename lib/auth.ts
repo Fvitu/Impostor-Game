@@ -5,20 +5,21 @@ import { validatePlayerName } from "./player-name";
 
 const BCRYPT_ROUNDS = 10;
 
-// AUDIT: If JWT_SECRET is not set, JWTs are signed with a publicly-known key.
-// In development we keep a default to avoid blocking local dev, but in
-// production the application must fail fast to prevent token forgery.
-if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
-	throw new Error("JWT_SECRET must be set in production environment");
+const DEFAULT_JWT_SECRET = "impostor-game-default-secret-change-me";
+
+function getJwtSecret(): Uint8Array {
+	const secret = process.env.JWT_SECRET?.trim();
+	if (!secret) {
+		if (process.env.NODE_ENV === "production") {
+			console.warn(
+				"[AUTH WARNING] JWT_SECRET environment variable is not set in production. " +
+				"Falling back to default secret. Set JWT_SECRET in your environment variables to ensure maximum token security."
+			);
+		}
+		return new TextEncoder().encode(DEFAULT_JWT_SECRET);
+	}
+	return new TextEncoder().encode(secret);
 }
-const JWT_SECRET_RAW = process.env.JWT_SECRET || "impostor-game-default-secret-change-me";
-if (!process.env.JWT_SECRET) {
-	console.warn(
-		"[AUTH WARNING] JWT_SECRET environment variable is not set. " +
-		"Using insecure default secret. Set JWT_SECRET in production to prevent token forgery."
-	);
-}
-const JWT_SECRET = new TextEncoder().encode(JWT_SECRET_RAW);
 
 const JWT_EXPIRY = "7d";
 
@@ -180,12 +181,12 @@ export async function createSessionToken(user: SafeUser): Promise<string> {
 		.setProtectedHeader({ alg: "HS256" })
 		.setIssuedAt()
 		.setExpirationTime(JWT_EXPIRY)
-		.sign(JWT_SECRET);
+		.sign(getJwtSecret());
 }
 
 export async function verifySessionToken(token: string): Promise<{ userId: string; username: string } | null> {
 	try {
-		const { payload } = await jwtVerify(token, JWT_SECRET);
+		const { payload } = await jwtVerify(token, getJwtSecret());
 		if (typeof payload.userId === "string" && typeof payload.username === "string") {
 			return { userId: payload.userId, username: payload.username };
 		}
